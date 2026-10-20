@@ -4,7 +4,11 @@
 <div class="card">
   <h1>Your proof is ready</h1>
   {% if age_not_confirmed %}<p class="banner">Your wallet didn't confirm that you're 18 or over, so this proof doesn't mention age. Nothing about your age was stored.</p>{% endif %}
-  <p><strong>1. Add this link to your profile.</strong></p>
+  <p><strong>1. First, before you forget, save your removal code.</strong> It is shown only once, so save it before leaving this page. With it you can remove this proof even if you lose access to your account.</p>
+  <span class="code">{{ code }}</span>
+</div>
+<div class="card">
+  <p><strong>2. Add this link to your profile.</strong></p>
   <p>Label: <code>{{ proof_label(proof, ", ") }}</code>
      (or any label you like; only the link is checked)<br>
      Value: <code data-proof-url>{{ url }}</code></p>
@@ -22,7 +26,7 @@
 </div>
 {% if proof.status == "pending" %}
 <div class="card">
-  <p><strong>2. Confirm.</strong> Once you've saved your profile, we check that it links here. Until then your proof page only says "pending" and shows no name. If we don't see the link within 24 hours, the proof is deleted.</p>
+  <p><strong>3. Confirm.</strong> Once you've saved your profile, we check that it links here. Until then your proof page only says "pending" and shows no name. If we don't see the link within 24 hours, the proof is deleted.</p>
   <form method="post" action="/check/{{ proof.id }}">
     <button type="submit">I've added it: check now</button>
   </form>
@@ -47,8 +51,4 @@
   </script>
 </div>
 {% endif %}
-<div class="card">
-  <p><strong>{{ 3 if proof.status == 'pending' else 2 }}. Save your removal code.</strong> It is shown only once, so save it before leaving this page. With it you can remove this proof even if you lose access to your account.</p>
-  <span class="code">{{ code }}</span>
-</div>
 {% endblock %}
