@@ -39,7 +39,7 @@
     <tr><th>Stored, per proof</th><th>Never stored</th></tr>
     <tr><td>
       <ul>
-        <li>Your account's address and profile link</li>
+        <li>Your Fediverse handle (e.g. <code>@alice@example.social</code>) and the web links to your account and its profile page</li>
         <li>The level, the date, and how you confirmed the account</li>
         <li>Your legal name, <em>only</em> for the Verified name level</li>
         <li>The country and authority that issued your ID</li>
@@ -48,7 +48,7 @@
       </ul></td>
       <td>
       <ul>
-        <li>ID numbers, tax codes, birth dates or places, addresses, photos</li>
+        <li>ID numbers, tax codes, birth dates or places, home addresses, photos</li>
         <li>The credential from your wallet</li>
         <li>Your sign-in token (discarded right after use)</li>
         <li>Anything linking two proofs to the same person</li>
@@ -66,7 +66,7 @@
     <tr><th>Column</th><th>Contents</th></tr>
     <tr><td><code>id</code></td><td>Random ID used in the proof link</td></tr>
     <tr><td><code>level</code></td><td><code>legal_name</code> or <code>person</code></td></tr>
-    <tr><td><code>subject_uri</code>, <code>profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub address, profile page and handle (all public already)</td></tr>
+    <tr><td><code>subject_uri</code>, <code>profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub ID (a web link such as <code>https://example.social/users/alice</code>), its profile page link, and your handle such as <code>@alice@example.social</code> (all public already)</td></tr>
     <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
     <tr><td><code>method</code>, <code>binding</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
