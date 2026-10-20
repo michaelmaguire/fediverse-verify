@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ settings.app_name }}{% endblock %}</title>
+{% block head %}{% endblock %}
+<style>
+  :root { --bg:#fafaf9; --fg:#1c1917; --muted:#57534e; --card:#fff; --line:#e7e5e4; --accent:#2563eb; --warn:#b45309; --warnbg:#fef3c7; --mat:#e7e5e4; --matbar:#d6d3d1; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1917; --fg:#f5f5f4; --muted:#a8a29e; --card:#292524; --line:#44403c; --accent:#60a5fa; --warn:#fbbf24; --warnbg:#422006; --mat:#3a3532; --matbar:#44403c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width: 40rem; margin: 1rem auto 2rem; padding: 0 1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.5rem; margin-bottom:1rem; }
+  h1 { font-size:1.5rem; margin:0 0 .5rem; } h2 { font-size:1.15rem; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  label { display:block; margin:.75rem 0 .25rem; font-weight:600; }
+  input[type=text] { width:100%; padding:.6rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; }
+  .choice { display:flex; gap:.5rem; align-items:flex-start; font-weight:normal; margin:.5rem 0; }
+  button { margin-top:1rem; padding:.6rem 1.1rem; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+  button.danger { background:#dc2626; }
+  code, .code { font-family: ui-monospace, monospace; word-break: break-all; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:.15rem .35rem; }
+  .code { display:block; padding:.75rem; font-size:1.05rem; }
+  pre.code { font-size:.75rem; white-space:pre; overflow-x:auto; }
+  details summary { cursor:pointer; margin:.75rem 0; } h3 { font-size:1rem; margin:1.25rem 0 .4rem; }
+  .banner { background:var(--warnbg); color:var(--warn); border-radius:8px; padding:.6rem .9rem; font-weight:600; margin-bottom:1rem; }
+  .qr svg { width: 260px; height: 260px; background:#fff; border-radius:8px; }
+  a { color: var(--accent); }
+  header.site { max-width:40rem; margin:1.5rem auto 0; padding:0 1rem; }
+  header.site a { color:var(--fg); text-decoration:none; font-size:1.6rem; font-weight:800; letter-spacing:-.01em; }
+  footer { max-width:40rem; margin:0 auto 2rem; padding:1rem 1rem 0; border-top:1px solid var(--line); color:var(--muted); font-size:.8rem; }
+  footer p { margin:.4rem 0 0; } footer code { font-size:.75rem; }
+  .steps-list li { margin:.35rem 0; }
+  table.data { border-collapse:collapse; width:100%; font-size:.9rem; } table.data th, table.data td { text-align:left; vertical-align:top; padding:.4rem .5rem; border-bottom:1px solid var(--line); }
+  dl.specs dt { font-weight:600; margin-top:.6rem; } dl.specs dd { margin:.1rem 0 0 0; color:var(--muted); font-size:.92rem; }
+  .steps li { margin: .75rem 0; }
+  /* Example illustrations: framed and badged so they never look like part of this page. */
+  .shot { margin:.6rem 0 .4rem; background:var(--mat); border:1px solid var(--line); border-radius:10px; overflow:hidden; max-width:640px; }
+  .shot__bar { display:flex; align-items:center; gap:.6rem; padding:.35rem .7rem; background:var(--matbar); font-size:.78rem; color:var(--muted); }
+  .shot__dots { display:flex; gap:4px; } .shot__dots i { width:8px; height:8px; border-radius:50%; background:var(--line); display:block; }
+  .shot__where { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .shot__badge { font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:.68rem; color:#fff; background:#78716c; padding:.1rem .45rem; border-radius:4px; }
+  .shot__body { padding:14px; pointer-events:none; cursor:default; }
+  .shot__body img { display:block; max-width:100%; height:auto; border-radius:6px; margin:0; border:0; }
+  /* Drawn copy of Mastodon's form; always light, like Mastodon's default theme. */
+  .mshot { zoom:.88; opacity:.92; margin:0; padding: 22px 25px 20px; background:#fff; color:#1c1b22; border:1px solid #d9d8e3; border-radius:12px; font-family: Inter, Roboto, system-ui, sans-serif; font-size:13px; }
+  .mshot__title { font-size:15px; font-weight:600; margin-bottom:18px; }
+  .mshot__field { margin-bottom:16px; }
+  .mshot__label { font-weight:600; font-size:14px; }
+  .mshot__hint { color:#5d5a75; margin:2px 0 8px; }
+  .mshot__input { display:flex; align-items:center; gap:8px; padding:10px 14px 10px 16px; background:#f4f4f7; border:1px solid #d9d8e3; border-radius:6px; font-size:14px; }
+  .mshot__input span { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .mshot__input svg { width:20px; height:20px; flex:none; fill:#4c4a63; }
+  .mshot__count { margin-top:6px; }
+  .mshot__warning { margin-top:6px; color:#b45309; font-weight:600; }
+  .mshot__actions { display:flex; justify-content:flex-end; align-items:center; gap:24px; margin-top:8px; font-size:14px; font-weight:600; }
+  .mshot__cancel { color:#563acc; }
+  .mshot__save { background:#563acc; color:#fff; padding:9px 18px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header class="site"><a href="/">{{ settings.app_name }}</a></header>
+<main>
+{% if mock %}<div class="banner">Test mode: identities are not checked. Proofs from this server are marked "mock".</div>{% endif %}
+{% block body %}{% endblock %}
+</main>
+<footer>
+  <nav><a href="/">Verify an account</a> · <a href="/about">About &amp; privacy</a> · <a href="/revoke">Remove a proof</a></nav>
+  <p>Open source (Apache-2.0): <a href="{{ build.source_url }}">{{ build.source_url | replace("https://", "") }}</a> ·
+    {% if build.commit_url %}built from commit <a href="{{ build.commit_url }}"><code>{{ build.short }}</code></a>
+    {% elif build.commit %}built from commit <code>{{ build.short }}</code> plus uncommitted changes
+    {% else %}build commit unknown (development build){% endif %}</p>
+</footer>
+</body>
+</html>

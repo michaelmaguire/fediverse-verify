@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card">
+  <h1>Confirm with your wallet</h1>
+  <p>Account: <strong>{{ flow.account.handle }}</strong>.
+     {% if flow.level == "legal_name" %}Your wallet will be asked for your <strong>first and last name</strong> and <strong>which country and authority issued your ID</strong>. All of these are published on your proof page.
+     {% else %}Your wallet will be asked only <strong>which country and authority issued your ID</strong>. That is all that's published; nothing else about you.{% endif %}</p>
+
+  {% if flow.wallet.kind == "form" %}
+    <form method="post" action="/wallet/mock">
+      <input type="hidden" name="csrf" value="{{ flow.csrf }}">
+      <p class="muted">Mock wallet: type what a real wallet would disclose.</p>
+      {% if flow.level == "legal_name" %}
+        <label for="given_name">Given name</label><input id="given_name" name="given_name" type="text" required>
+        <label for="family_name">Family name</label><input id="family_name" name="family_name" type="text" required>
+      {% endif %}
+      <label for="issuing_country">Issuing country</label>
+      <select id="issuing_country" name="issuing_country">
+        {% for code, name in country_names | dictsort(by="value") %}<option value="{{ code }}"{% if code == "IT" %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+      <label for="issuing_authority">Issuing authority <span class="muted">(optional)</span></label>
+      <input id="issuing_authority" name="issuing_authority" type="text" placeholder="e.g. Ministero dell'Interno">
+      <button type="submit">Share with verifier</button>
+    </form>
+  {% else %}
+    <p>Scan with your EU Digital Identity wallet, or <a href="{{ flow.wallet.wallet_url }}">open the wallet on this device</a>.</p>
+    <div class="qr">{{ qr_svg | safe }}</div>
+    <p class="muted" id="status">Waiting for your wallet…</p>
+    <script>
+      (async function poll() {
+        try {
+          const r = await fetch("/wallet/status", {credentials: "same-origin"});
+          const s = await r.json();
+          if (s.state === "done") { location.href = s.next; return; }
+          if (s.state === "error") { document.getElementById("status").textContent = "Verification failed. Please start again."; return; }
+        } catch (e) {}
+        setTimeout(poll, 2000);
+      })();
+    </script>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+# Example deployment: the verifier behind your own TLS proxy.
+#   VERIFIER_SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d
+# Add `--profile eudi` to also run the EU reference verifier endpoint for real wallets.
+services:
+  verifier:
+    build:
+      context: .
+      args:
+        # VERIFIER_GIT_COMMIT=$(git rev-parse HEAD) docker compose build
+        GIT_COMMIT: ${VERIFIER_GIT_COMMIT:-unknown}
+    restart: unless-stopped
+    environment:
+      VERIFIER_PUBLIC_URL: ${VERIFIER_PUBLIC_URL:-http://localhost:8000}
+      VERIFIER_SESSION_SECRET: ${VERIFIER_SESSION_SECRET:?set VERIFIER_SESSION_SECRET}
+      VERIFIER_IDENTITY_PROVIDER: ${VERIFIER_IDENTITY_PROVIDER:-mock}
+      VERIFIER_EUDI_ENDPOINT: ${VERIFIER_EUDI_ENDPOINT:-http://eudi-verifier:8080}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - verifier-data:/data
+
+  eudi-verifier:
+    profiles: [eudi]
+    image: ghcr.io/eu-digital-identity-wallet/eudi-srv-verifier-endpoint:latest
+    restart: unless-stopped
+    environment:
+      # Must be the public HTTPS URL wallets reach the endpoint at; see the endpoint's README.
+      VERIFIER_PUBLICURL: ${EUDI_PUBLIC_URL:-https://wallet-verifier.example.org}
+      VERIFIER_DEFAULTHTTPRESPONSEMODE: DirectPost
+      # Wallet responses (which contain the disclosed claims) are held in this component's memory.
+      # Defaults keep them up to 10 days; keep them 10 minutes. Its clean-up runs every 30 minutes,
+      # so a response is gone within ~40 minutes. Stated on /about: keep the two in sync.
+      VERIFIER_MAXAGE: PT10M
+      VERIFIER_PRESENTATIONS_CLEANUP_MAXAGE: PT10M
+
+volumes:
+  verifier-data:

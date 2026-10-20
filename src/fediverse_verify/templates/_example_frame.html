@@ -1,0 +1,8 @@
+{#- Frames an illustration so it can't be mistaken for part of this page.
+    Usage: {% call example_frame("Caption") %}...{% endcall %} -#}
+{% macro example_frame(caption) -%}
+<figure class="shot">
+  <div class="shot__bar" aria-hidden="true"><span class="shot__dots"><i></i><i></i><i></i></span><span class="shot__where">{{ caption }}</span><span class="shot__badge">Example</span></div>
+  <div class="shot__body" inert>{{ caller() }}</div>
+</figure>
+{%- endmacro %}

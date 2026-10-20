@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.egg-info/
+/data/
+.pytest_cache/
+deploy/.vault-password
+deploy/inventory/hosts.yml

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}About · {{ settings.app_name }}{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>About this verifier</h1>
+  <p>This service lets a real person show that they control a Fediverse account (for example on Mastodon), optionally under their legal name, using the government digital ID in their wallet app. The account's own server never sees the ID.</p>
+  <p>It is meant to help readers tell real people from impersonators and automated accounts, while keeping pseudonymous accounts possible and storing as little as possible about anyone.</p>
+</div>
+
+<div class="card">
+  <h2>What a proof says</h2>
+  <table class="data">
+    <tr><th>Level</th><th>Published claim</th><th>Asked from your wallet</th></tr>
+    <tr><td><strong>Verified name</strong><br><span class="muted">link: <code>/n/…</code></span></td>
+        <td>"This account is controlled by <em>[legal name]</em>, confirmed with an ID issued by <em>[country (authority)]</em>."</td>
+        <td>Given name, family name, issuing country and authority</td></tr>
+    <tr><td><strong>Verified person</strong><br><span class="muted">link: <code>/u/…</code></span></td>
+        <td>"This account is controlled by a real person, confirmed with an ID issued by <em>[country (authority)]</em>." No other personal details.</td>
+        <td>Only the issuing country and authority</td></tr>
+  </table>
+  <p class="muted">Readers see which government vouched for the person, so they can weigh it. For the Verified person level this reveals roughly where you're from, at country level only.</p>
+  <p class="muted">A proof says nothing about whether someone has other accounts: one person may verify several. Proofs don't expire; they last until removed.</p>
+</div>
+
+<div class="card">
+  <h2>How it works</h2>
+  <ol>
+    <li><strong>You confirm the account is yours</strong>, either by linking to your proof from your profile (we then check your public profile), or by signing in with Mastodon (we read your public profile once and immediately discard the sign-in token).</li>
+    <li><strong>Your wallet shares only what the chosen level needs.</strong> The request uses OpenID for Verifiable Presentations; your wallet shows exactly what is asked and you approve it. The credential's signature is checked against the issuing government's keys.</li>
+    <li><strong>We publish a proof page</strong> that links back to your profile with <code>rel="me"</code>. When your profile links to the page, Mastodon shows a green check mark next to that link.</li>
+    <li><strong>The page carries a signed statement</strong> (a JSON Web Token signed by this verifier) so that anyone, including Fediverse servers that choose to trust this verifier, can check it independently using our <a href="/.well-known/jwks.json">public keys</a>.</li>
+  </ol>
+  {% if mock %}<p class="banner">This server is in test mode: no real wallet or ID is involved, and its proofs are marked "mock".</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>What we store, and what we don't</h2>
+  <table class="data">
+    <tr><th>Stored, per proof</th><th>Never stored</th></tr>
+    <tr><td>
+      <ul>
+        <li>Your account's address and profile link</li>
+        <li>The level, the date, and how you confirmed the account</li>
+        <li>Your legal name, <em>only</em> for the Verified name level</li>
+        <li>The country and authority that issued your ID</li>
+        <li>The signed statement shown on the proof page</li>
+        <li>A one-way hash of your removal code (not the code itself)</li>
+      </ul></td>
+      <td>
+      <ul>
+        <li>ID numbers, tax codes, birth dates or places, addresses, photos</li>
+        <li>The credential from your wallet</li>
+        <li>Your sign-in token (discarded right after use)</li>
+        <li>Anything linking two proofs to the same person</li>
+      </ul></td></tr>
+  </table>
+  <p>Proofs that are never confirmed by a link from your profile are deleted after {{ pending_hours }} hours. Full details, and links to the code that does all this, are <a href="#stored-data">below</a>.</p>
+</div>
+
+<div class="card" id="stored-data">
+  <h2>Exactly what is stored, and how</h2>
+  <p>This service keeps its data in one <a href="https://www.sqlite.org/">SQLite</a> database file, <code>verifier.sqlite3</code>, plus one key file, both in its data folder on the server's disk. Nothing else is written to disk.</p>
+
+  <h3>Table <code>proofs</code>: one row per proof</h3>
+  <table class="data">
+    <tr><th>Column</th><th>Contents</th></tr>
+    <tr><td><code>id</code></td><td>Random ID used in the proof link</td></tr>
+    <tr><td><code>level</code></td><td><code>legal_name</code> or <code>person</code></td></tr>
+    <tr><td><code>subject_uri</code>, <code>profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub address, profile page and handle (all public already)</td></tr>
+    <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
+    <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
+    <tr><td><code>method</code>, <code>binding</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
+    <tr><td><code>attestation</code></td><td>The signed statement shown on your proof page (the same facts as above); empty while pending</td></tr>
+    <tr><td><code>revocation_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
+    <tr><td><code>created_at</code>, <code>status</code>, <code>expires_at</code></td><td>When it was issued, whether it is pending or active, and when a pending proof will be deleted</td></tr>
+  </table>
+  <p>These values are stored as plain text: apart from the removal code, they are what your proof page publishes anyway. The file is protected by the server's normal disk permissions.</p>
+
+  <h3>Table <code>oauth_clients</code>: Mastodon app registrations</h3>
+  <p>Created only when someone uses "Sign in with Mastodon". The first sign-in from a Mastodon server registers this verifier as an app on that server, which hands back an app ID and secret (<code>host</code>, <code>client_id</code>, <code>client_secret</code>, <code>redirect_uri</code>, <code>created_at</code>). They identify this verifier, not you, and are reused for later sign-ins from the same server. They are not deleted when proofs are removed, so for a server with a single user, the registration does show that its owner signed in here at least once. Linking from your profile instead never creates one.</p>
+
+  <h3>File <code>signing-key.pem</code></h3>
+  <p>The verifier's private signing key. It contains no personal data; its public half is published at <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>.</p>
+
+  <details><summary>The database schema, exactly as the running code creates it</summary><pre class="code">{{ schema }}</pre></details>
+
+  <h3>Deleting</h3>
+  <p>Removing a proof deletes its row outright, and the database runs with <a href="https://www.sqlite.org/pragma.html#pragma_secure_delete"><code>secure_delete</code></a> on, so the deleted content is overwritten with zeros rather than left in the file. Pending proofs are deleted the same way after {{ pending_hours }} hours. This software makes no backups; if the operator backs up the data folder, removed proofs remain in those backups until the backups themselves are deleted.</p>
+
+  <h3>Held only briefly, never on disk</h3>
+  <ul>
+    <li><strong>In this service's memory</strong> (gone when it restarts): your session while you verify or sign in, for up to {{ flow_minutes }} minutes (your account, the chosen level and the wallet request ID; in test mode, also the details typed into the mock wallet until they're read), and the time of the last check of each pending proof.</li>
+    <li><strong>In the EU verifier component</strong>, which talks to your wallet (used only with real wallets, not in test mode): the wallet's response (only the details requested above), in memory, for at most about 40 minutes, after which its clean-up deletes it.</li>
+    <li><strong>In your browser</strong>: a signed (not encrypted) session cookie, <code>fv_session</code>, holding your session ID, and the new proof's ID and removal code until the "proof is ready" page has been shown once. It stays on your device.</li>
+    <li><strong>Logs</strong>: request logging is turned off, so visits, IP addresses and proof IDs are not logged by this service. Only errors are logged, to the server console.</li>
+  </ul>
+
+  <h3>Check it in the code</h3>
+  <p class="muted">
+  {% if build.commit_url %}These links point to commit <code>{{ build.short }}</code>, the exact version running here.
+  {% elif build.commit %}These links point to commit <code>{{ build.short }}</code>, but this server runs uncommitted changes on top of it, so the code may differ.
+  {% else %}The exact version running here is unknown, so these links point to the latest code, which may differ.{% endif %}</p>
+  <ul>
+    {% for item in code.values() %}<li><a href="{{ item.url }}">{{ item.label }}</a> <span class="muted">({{ item.where }})</span></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2>Removing your data</h2>
+  <p>You can <a href="/revoke">remove a proof</a> at any time with the removal code you were given, or by signing in with your account. Removal deletes everything we hold about that proof, including any name; the page then no longer exists. This is your right to erasure under <a href="https://eur-lex.europa.eu/eli/reg/2016/679/oj">GDPR</a> (Article 17).</p>
+  <p class="muted">Also remove the link from your profile: your own server keeps showing its green check mark until you do. Other servers drop it when they next refresh your profile.</p>
+  {% if settings.operator_contact %}<p>Lost both your account and your code? Contact the operator: {{ settings.operator_contact }}.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Standards used</h2>
+  <dl class="specs">
+    <dt><a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">OpenID for Verifiable Presentations 1.0</a></dt>
+    <dd>How we ask your wallet for specific details (using its DCQL query language) and receive them.</dd>
+    <dt><a href="https://www.rfc-editor.org/rfc/rfc9901">RFC 9901: Selective Disclosure for JWTs (SD-JWT)</a> and <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-sd-jwt-vc/">SD-JWT VC</a></dt>
+    <dd>The credential format that lets your wallet reveal only some details, such as your name but not your birth date.</dd>
+    <dt><a href="https://eur-lex.europa.eu/eli/reg/2024/1183/oj">Regulation (EU) 2024/1183 (eIDAS 2.0)</a>, <a href="https://eur-lex.europa.eu/eli/reg_impl/2024/2977/oj">Implementing Regulation (EU) 2024/2977</a></dt>
+    <dd>The EU law behind the European Digital Identity Wallet and the person identification data (PID) it carries.</dd>
+    <dt><a href="https://eu-digital-identity-wallet.github.io/eudi-doc-architecture-and-reference-framework/">EUDI Wallet Architecture and Reference Framework</a>, <a href="https://github.com/eu-digital-identity-wallet/eudi-doc-attestation-rulebooks-catalog/blob/main/rulebooks/pid/pid-rulebook.md">PID Rulebook</a></dt>
+    <dd>The technical framework for EU wallets and the exact PID attributes we may request.</dd>
+    <dt><a href="https://italia.github.io/eid-wallet-it-docs/">IT-Wallet technical specifications</a></dt>
+    <dd>Italy's national profile of the EU wallet (the IO app).</dd>
+    <dt><a href="https://microformats.org/wiki/rel-me"><code>rel="me"</code></a> and <a href="https://docs.joinmastodon.org/user/profile/">Mastodon profile verification</a></dt>
+    <dd>The two-way link that makes Mastodon show a green check mark.</dd>
+    <dt><a href="https://www.w3.org/TR/activitypub/">ActivityPub</a> and <a href="https://www.rfc-editor.org/rfc/rfc7033">RFC 7033: WebFinger</a></dt>
+    <dd>How we find your account and read your public profile, on any Fediverse server.</dd>
+    <dt><a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0</a>, <a href="https://www.rfc-editor.org/rfc/rfc7636">PKCE</a>, <a href="https://www.rfc-editor.org/rfc/rfc7009">token revocation</a></dt>
+    <dd>"Sign in with Mastodon", with the token revoked straight after use.</dd>
+    <dt><a href="https://www.rfc-editor.org/rfc/rfc7519">JWT</a>, <a href="https://www.rfc-editor.org/rfc/rfc7515">JWS</a>, <a href="https://www.rfc-editor.org/rfc/rfc7518">JWA (ES256)</a>, <a href="https://www.rfc-editor.org/rfc/rfc7517">JWK</a>, <a href="https://www.rfc-editor.org/rfc/rfc7638">JWK thumbprint</a></dt>
+    <dd>The signed statement on each proof page and the public keys to check it.</dd>
+    <dt><a href="https://codeberg.org/fediverse/fep/src/branch/main/fep/c390/fep-c390.md">FEP-c390: Identity Proofs</a></dt>
+    <dd>Related Fediverse proposal for linking identities to accounts; this verifier aims to align with Fediverse Enhancement Proposals over time.</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2>Source code</h2>
+  <p>This verifier is open source. The footer of every page links to the source code and to the exact version running here, so you can check what it does with your data.</p>
+</div>
+{% endblock %}

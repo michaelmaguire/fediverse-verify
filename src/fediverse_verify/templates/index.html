@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="card">
+  <h1>Verify your account</h1>
+  <p>Show that a real person controls your Fediverse account, optionally with your legal name, using the government digital ID in your EU Digital Identity wallet app.</p>
+  <ul class="steps-list">
+    <li><strong>You choose what's published:</strong> your name, or only that a real person stands behind the account. Either way, the proof shows which country issued your ID.</li>
+    <li><strong>Your server never sees your ID.</strong> You get a proof page to link from your profile; Mastodon then shows a green check mark next to it.</li>
+    <li><strong>We keep almost nothing:</strong> no ID numbers, birth dates or document data. You can remove your proof at any time.</li>
+  </ul>
+  <p class="muted"><a href="/about">How it works, what we store, and the standards it uses →</a></p>
+</div>
+<div class="card">
+  <h2>Get started</h2>
+  <form method="post" action="/verify">
+    <label for="handle">Your account</label>
+    <input id="handle" name="handle" type="text" placeholder="@you@example.social" required autocomplete="username">
+    <label>What to publish</label>
+    <label class="choice"><input type="radio" name="level" value="legal_name" checked>
+      <span><strong>Verified name</strong> (recommended): your legal name is shown on your proof page.</span></label>
+    <label class="choice"><input type="radio" name="level" value="person">
+      <span><strong>Verified person</strong>: proves a real person controls the account. Only the issuing country is published; no name or other personal data.</span></label>
+    <label>How to confirm the account is yours</label>
+    <label class="choice"><input type="radio" name="binding" value="link-back" checked>
+      <span><strong>Link from my profile</strong> (works with any Fediverse server): you add the proof link to your profile, and we check that it's there.</span></label>
+    <label class="choice"><input type="radio" name="binding" value="mastodon-oauth">
+      <span><strong>Sign in with Mastodon</strong>: confirms it straight away. We only read your public profile and discard the sign-in token immediately.</span></label>
+    <button type="submit">Continue</button>
+  </form>
+</div>
+{% endblock %}

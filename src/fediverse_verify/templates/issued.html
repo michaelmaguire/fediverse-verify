@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_example_frame.html" import example_frame %}
+{% block body %}
+<div class="card">
+  <h1>Your proof is ready</h1>
+  <p><strong>1. Add this link to your profile.</strong></p>
+  <p>Label: <code>{{ "Verified name" if proof.level == "legal_name" else "Verified person" }}</code>
+     (or any label you like; only the link is checked)<br>
+     Value: <code data-proof-url>{{ url }}</code></p>
+  <ol class="steps">
+    <li>On Mastodon, open your profile and choose <em>Edit profile</em>. Under <em>Custom fields</em>, click <em>Add field</em>:
+      {% call example_frame("On your Mastodon server: Edit profile") %}<img src="/static/mastodon-add-field.png" alt="Screenshot of Mastodon's Edit Profile page: the Custom fields section with the Add field button highlighted" width="607" height="104">{% endcall %}</li>
+    <li>Enter the label and paste the link as the value, then click <em>Save</em>:
+      {% call example_frame("On your Mastodon server: Add custom field") %}{% with label=("Verified name" if proof.level == "legal_name" else "Verified person"), value=url %}{% include "_mastodon_field_form.html" %}{% endwith %}{% endcall %}
+      {% if url | length > 40 %}<span class="muted">Mastodon warns that the value exceeds the recommended 40 characters. That's fine: save anyway.</span>{% endif %}</li>
+  </ol>
+  <p class="muted">Images show Mastodon 4.7 (the form above is drawn with your details filled in); other servers look different.</p>
+  {% if proof.status != "pending" %}
+  <p class="muted">After you save, your server checks the link and shows a green check mark next to it. This can take a minute.</p>
+  {% endif %}
+</div>
+{% if proof.status == "pending" %}
+<div class="card">
+  <p><strong>2. Confirm.</strong> Once you've saved your profile, we check that it links here. Until then your proof page only says "pending" and shows no name. If we don't see the link within 24 hours, the proof is deleted.</p>
+  <form method="post" action="/check/{{ proof.id }}">
+    <button type="submit">I've added it: check now</button>
+  </form>
+  <p class="muted" id="status">Checking automatically every few seconds while this page is open…</p>
+  <script>
+    (function () {
+      const status = document.getElementById("status");
+      const started = Date.now();
+      async function poll() {
+        try {
+          const r = await fetch("/check/{{ proof.id }}", {method: "POST", headers: {"Accept": "application/json"}});
+          if (r.ok && (await r.json()).status === "active") {
+            status.innerHTML = '<strong>Confirmed.</strong> Your proof is live: <a href="{{ url }}">{{ url }}</a>';
+            return;
+          }
+        } catch (e) {}
+        if (Date.now() - started < 15 * 60 * 1000) setTimeout(poll, 6000);
+        else status.textContent = "Stopped checking automatically. Use the button once your profile is saved.";
+      }
+      setTimeout(poll, 6000);
+    })();
+  </script>
+</div>
+{% endif %}
+<div class="card">
+  <p><strong>{{ 3 if proof.status == 'pending' else 2 }}. Save your removal code.</strong> It is shown only once, so save it before leaving this page. With it you can remove this proof even if you lose access to your account.</p>
+  <span class="code">{{ code }}</span>
+</div>
+{% endblock %}
