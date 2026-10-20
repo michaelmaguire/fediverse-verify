@@ -2,7 +2,7 @@
 {% block body %}
 <div class="card">
   <h1>Verify your account</h1>
-  <p>Show that a real person controls your Fediverse account, optionally with your legal name, using the government digital ID in your EU Digital Identity wallet app.</p>
+  <p>Show that a real person controls your Fediverse account, optionally with your legal name, using the government digital ID in your wallet app: {{ wallets | map(attribute='label') | join(' or ') }}.</p>
   <ul class="steps-list">
     <li><strong>You choose what's published:</strong> your name, or only that a real person stands behind the account. Either way, the proof shows which country issued your ID.</li>
     <li><strong>Your server never sees your ID.</strong> You get a proof page to link from your profile; Mastodon then shows a green check mark next to it.</li>
@@ -15,13 +15,19 @@
   <form method="post" action="/verify">
     <label for="handle">Your account</label>
     <input id="handle" name="handle" type="text" placeholder="@you@example.social" required autocomplete="username">
+    {% if wallets | length > 1 %}
+    <label>Your digital ID</label>
+    {% for w in wallets %}<label class="choice"><input type="radio" name="wallet" value="{{ w.name }}"{% if loop.first %} checked{% endif %}>
+      <span><strong>{{ w.label }}</strong> ({{ w.countries }})</span></label>
+    {% endfor %}
+    {% else %}<input type="hidden" name="wallet" value="{{ wallets[0].name }}">{% endif %}
     <label>What to publish</label>
     <label class="choice"><input type="radio" name="level" value="legal_name" checked>
       <span><strong>Verified name</strong> (recommended): your legal name is shown on your proof page. It's public: others may copy it, and removing your proof later can't reach those copies.</span></label>
     <label class="choice"><input type="radio" name="level" value="person">
       <span><strong>Verified person</strong>: proves a real person controls the account. Only the issuing country is published; no name or other personal data.</span></label>
     <label class="choice"><input type="checkbox" name="show_age" value="yes">
-      <span><strong>Also show that I'm 18 or over</strong>: adds "18+" to your proof. Your wallet shares only a yes/no "over 18" answer from an EU proof-of-age credential, never your birth date. For Verified name, if you have no proof-of-age credential, your birth date may be used instead: once, and never stored.</span></label>
+      <span><strong>Also show that I'm 18 or over</strong>: adds "18+" to your proof. Your wallet shares only a yes/no "over 18" answer (the Swiss e-ID and the EU proof-of-age credential both provide one), never your birth date. Exception: for Verified name with an EU wallet and no proof-of-age credential, your birth date may be used instead, once, and never stored.</span></label>
     <label>How to confirm the account is yours</label>
     <label class="choice"><input type="radio" name="binding" value="link-back" checked>
       <span><strong>Link from my profile</strong> (works with any Fediverse server): you add the proof link to your profile, and we check that it's there.</span></label>

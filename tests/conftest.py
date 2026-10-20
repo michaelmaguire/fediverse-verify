@@ -69,7 +69,7 @@ def mastodon() -> FakeMastodon:
 @pytest.fixture
 def settings(tmp_path) -> Settings:
     return Settings(public_url="https://verify.test", data_dir=tmp_path, session_secret="test-secret",
-                    identity_provider="mock", allow_private_hosts=True)
+                    identity_providers=("mock",), allow_private_hosts=True)
 
 
 @pytest.fixture

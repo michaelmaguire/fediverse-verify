@@ -1,6 +1,7 @@
 # Example deployment: the verifier behind your own TLS proxy.
 #   VERIFIER_SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d
-# Add `--profile eudi` to also run the EU reference verifier endpoint for real wallets.
+# Real wallets: add `--profile eudi` (EU Digital Identity Wallets) and/or `--profile swiyu`
+# (Swiss e-ID), and list them in VERIFIER_IDENTITY_PROVIDERS, e.g. "eudi,swiyu".
 services:
   verifier:
     build:
@@ -12,8 +13,11 @@ services:
     environment:
       VERIFIER_PUBLIC_URL: ${VERIFIER_PUBLIC_URL:-http://localhost:8000}
       VERIFIER_SESSION_SECRET: ${VERIFIER_SESSION_SECRET:?set VERIFIER_SESSION_SECRET}
-      VERIFIER_IDENTITY_PROVIDER: ${VERIFIER_IDENTITY_PROVIDER:-mock}
+      VERIFIER_IDENTITY_PROVIDERS: ${VERIFIER_IDENTITY_PROVIDERS:-mock}
       VERIFIER_EUDI_ENDPOINT: ${VERIFIER_EUDI_ENDPOINT:-http://eudi-verifier:8080}
+      VERIFIER_SWIYU_ENDPOINT: ${VERIFIER_SWIYU_ENDPOINT:-http://swiyu-verifier:8080}
+      # Comma-separated issuer DIDs whose Swiss e-IDs are accepted (from the swiyu trust registry).
+      VERIFIER_SWIYU_ISSUER_DIDS: ${VERIFIER_SWIYU_ISSUER_DIDS:-}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -33,5 +37,53 @@ services:
       VERIFIER_MAXAGE: PT10M
       VERIFIER_PRESENTATIONS_CLEANUP_MAXAGE: PT10M
 
+  # Swiss e-ID: the federal generic verifier (github.com/swiyu-admin-ch/swiyu-verifier).
+  # Needs a verifier DID registered in the swiyu identifier registry and onboarding on the
+  # swiyu portals; see its README and the swiyu "getting started as verifier" cookbook.
+  # Its management API must stay internal; only /oid4vp/api must be reachable by wallets.
+  # Required for --profile swiyu: SWIYU_VERIFIER_DID, SWIYU_DID_VERIFICATION_METHOD,
+  # SWIYU_SIGNING_KEY, SWIYU_DB_PASSWORD (Compose checks variables even for inactive profiles).
+  swiyu-verifier:
+    profiles: [swiyu]
+    image: ghcr.io/swiyu-admin-ch/swiyu-verifier:latest
+    restart: unless-stopped
+    depends_on: [swiyu-db]
+    environment:
+      EXTERNAL_URL: ${SWIYU_EXTERNAL_URL:-https://swiyu-verifier.example.org}
+      VERIFIER_DID: ${SWIYU_VERIFIER_DID:-}
+      DID_VERIFICATION_METHOD: ${SWIYU_DID_VERIFICATION_METHOD:-}
+      SIGNING_KEY: ${SWIYU_SIGNING_KEY:-}
+      OPENID_CLIENT_METADATA_FILE: file:/verifier_metadata.json
+      POSTGRES_USER: swiyu
+      POSTGRES_PASSWORD: ${SWIYU_DB_PASSWORD:-}
+      POSTGRES_DB: swiyu_verifier
+      POSTGRES_JDBC: jdbc:postgresql://swiyu-db:5432/swiyu_verifier
+    configs:
+      - source: swiyu_metadata
+        target: /verifier_metadata.json
+
+  swiyu-db:
+    profiles: [swiyu]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: swiyu
+      POSTGRES_PASSWORD: ${SWIYU_DB_PASSWORD:-}
+      POSTGRES_DB: swiyu_verifier
+    volumes:
+      - swiyu-db:/var/lib/postgresql/data
+
+configs:
+  swiyu_metadata:
+    content: |
+      {
+        "client_id": "${SWIYU_VERIFIER_DID}",
+        "client_name": "Fediverse Verify",
+        "vp_formats_supported": {
+          "dc+sd-jwt": {"sd-jwt_alg_values": ["ES256"], "kb-jwt_alg_values": ["ES256"]}
+        }
+      }
+
 volumes:
   verifier-data:
+  swiyu-db:

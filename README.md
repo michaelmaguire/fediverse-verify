@@ -16,7 +16,7 @@ Design and decisions: [`docs/overview.md`](https://github.com/michaelmaguire/fed
    Both levels also request and publish `issuing_country` and `issuing_authority`, so readers see which government vouched.
 
    Either level can add **18+**: the EU Proof of Age attestation (`eu.europa.ec.av.1`, only `age_over_18`) is requested; for Verified name the PID `birthdate` is a fallback, used once and discarded. Only `age_over_18: true` is ever stored or published.
-3. **Their wallet presents the credential** via OpenID4VP (or the mock form in development).
+3. **Their wallet presents the credential** via OpenID4VP: an EU Digital Identity Wallet (through the EU reference verifier) or the Swiss e-ID (through the federal swiyu verifier), or the mock form in development.
 4. **The verifier publishes a proof page** at `/n/<id>` (name) or `/u/<id>` (person) containing:
    - `<link rel="me">` to the exact profile URL, so stock Mastodon shows a green check;
    - a signed attestation (ES256 JWS, `typ: identity-attestation+jwt`), embedded and at `<page>.jwt`, verifiable with `/.well-known/jwks.json`.
@@ -35,7 +35,9 @@ Per proof: account URI, profile URL, handle, level, method, binding, status (pen
 
 ## Revocation
 
-`/revoke` deletes everything about a proof, via the revocation code or by signing in with the account (which removes all of that account's proofs). Deleted proofs return 404. The user must also remove the profile field, because their own Mastodon server never re-checks a link that is already verified.
+`/revoke` deletes everything about a proof, via the removal code or by signing in with the account (which removes all of that account's proofs). Deleted proofs return 404, and no record of the removal is kept. The user must also remove the profile field, because their own Mastodon server never re-checks a link that is already verified.
+
+**Planned, not built yet:** the verifier becomes an ActivityPub actor and sends a signed `Delete` notice (proof ID only) to other servers when a proof ends, so they drop it promptly. Removals stay unstored: the notice is held only in an in-memory delivery queue for at most 24 hours. See the super repo's `docs/overview.md#telling-other-servers-revocation-notices-over-activitypub`.
 
 ## Develop
 
@@ -54,8 +56,10 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 | `VERIFIER_PUBLIC_URL` | `http://localhost:8000` | Public base URL (used in proof URLs and as `iss`) |
 | `VERIFIER_SESSION_SECRET` | required | Signs the session cookie |
 | `VERIFIER_DATA_DIR` | `./data` (`/data` in Docker) | SQLite DB and signing key (`signing-key.pem`, created on first start) |
-| `VERIFIER_IDENTITY_PROVIDER` | `mock` | `mock` (development only, proofs marked "mock") or `eudi` |
+| `VERIFIER_IDENTITY_PROVIDERS` | `mock` | Comma-separated wallet types offered: `eudi` (EU Digital Identity Wallets), `swiyu` (Swiss e-ID); or for development only `mock`, `mock-ch`. With several, users choose. Test and real types can't be mixed |
 | `VERIFIER_EUDI_ENDPOINT` | — | Base URL of the EUDI reference verifier endpoint |
+| `VERIFIER_SWIYU_ENDPOINT` | — | Base URL of the swiyu generic verifier's (internal) management API |
+| `VERIFIER_SWIYU_ISSUER_DIDS` | — | Comma-separated issuer DIDs whose Swiss e-IDs are accepted |
 | `VERIFIER_ALLOW_PRIVATE_HOSTS` | `false` | Allow account servers on private IPs (local testing only) |
 | `VERIFIER_SOURCE_URL` | `https://github.com/michaelmaguire/fediverse-verify` | Linked from every page's footer |
 | `VERIFIER_GIT_COMMIT` | from `git`, else unknown | Commit shown in the footer; set by the `GIT_COMMIT` build arg (`<sha>` or `<sha>-dirty`). Only a clean commit is linked. |
@@ -67,7 +71,7 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 ## Status
 
 - Working and tested: both account-binding methods, mock wallet, both levels, signed proofs, JWKS, revocation (34 tests, plus an end-to-end run against Mastodon 4.7 in `local/`).
-- Written but untested against a real wallet: the `eudi` provider.
+- Written but untested against a real wallet: the `eudi` and `swiyu` providers.
 - Not yet: `deploy/` (Ansible for the verifier's own server); optionally removing the profile field during revocation; in-memory flow state means a single process only.
 
 ## License

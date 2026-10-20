@@ -28,7 +28,8 @@
 <div class="card" id="age">
   <h2>Showing you're 18 or over</h2>
   <p>If you choose to add "18+", we ask your wallet for the EU <strong>proof-of-age credential</strong>, which exists for exactly this: it answers only "is this person over 18?" and contains no name, birth date or ID number (<a href="https://github.com/eu-digital-identity-wallet/av-doc-technical-specification">EU Age Verification specification</a>).</p>
-  <p>For the Verified name level only, if you have no proof-of-age credential, we may instead ask for your birth date from your ID. It is used once to work out whether you're 18 or over and then discarded: it's never stored or published. Your name is published at that level anyway; for Verified person we never ask for a birth date.</p>
+  <p>The <strong>Swiss e-ID</strong> answers "over 18?" directly, so no birth date is ever involved there.</p>
+  <p>For EU wallets at the Verified name level only, if you have no proof-of-age credential, we may instead ask for your birth date from your ID. It is used once to work out whether you're 18 or over and then discarded: it's never stored or published. Your name is published at that level anyway; for Verified person we never ask for a birth date.</p>
   <p class="muted">If your wallet doesn't confirm you're 18 or over, the proof is issued without mentioning age, and nothing about your age is kept. "18+" reflects a check at the time of verification of whoever controlled the account then; services with legal age-check duties may still need their own.</p>
 </div>
 
@@ -36,7 +37,7 @@
   <h2>How it works</h2>
   <ol>
     <li><strong>You confirm the account is yours</strong>, either by linking to your proof from your profile (we then check your public profile), or by <a href="#sign-in">signing in with Mastodon</a> (your server lets us read your account details once, then we cancel that permission).</li>
-    <li><strong>Your wallet shares only what the chosen level needs.</strong> The request uses OpenID for Verifiable Presentations; your wallet shows exactly what is asked and you approve it. The credential's signature is checked against the issuing government's keys.</li>
+    <li><strong>Your wallet shares only what the chosen level needs.</strong> This works with {{ wallets | map(attribute='label') | join(' and ') }}. The request uses OpenID for Verifiable Presentations; your wallet shows exactly what is asked and you approve it. The credential's signature is checked against the issuing government's keys.</li>
     <li><strong>We publish a proof page</strong> that links back to your profile with <code>rel="me"</code>. When your profile links to the page, Mastodon shows a green check mark next to that link.</li>
     <li><strong>The page also carries a <a href="#signed-copy">signed copy</a> of the proof's details</strong>, so that anyone, including Fediverse servers that choose to trust this verifier, can check for themselves that it came from us and hasn't been altered.</li>
   </ol>
@@ -56,7 +57,7 @@
     <tr><td><code>"name"</code></td><td><code>Mario Rossi</code></td><td>The legal name, only for the Verified name level</td></tr>
     <tr><td><code>"issuing_country"</code></td><td><code>IT</code></td><td>Country that issued the ID</td></tr>
     <tr><td><code>"issuing_authority"</code></td><td><code>Ministero dell'Interno</code></td><td>Authority that issued the ID</td></tr>
-    <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked (<code>mock</code> in test mode)</td></tr>
+    <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked: <code>eudi-pid</code> (EU wallet), <code>swiyu-eid</code> (Swiss e-ID), or <code>mock</code> in test mode</td></tr>
     <tr><td><code>"account_ownership_check"</code></td><td><code>link-back</code></td><td>How the account was proven yours (or <code>mastodon-sign-in</code>)</td></tr>
     <tr><td><code>"iat"</code></td><td><code>1792500000</code></td><td>When it was issued, in seconds since 1970</td></tr>
     <tr><td><code>"jti"</code></td><td><code>6q3yJY3bcSvJOlvk</code></td><td>The proof's ID, as in its link</td></tr>
@@ -90,6 +91,7 @@
   <p><strong>This verifier is not registered with any EU member state yet.</strong> So no official authority has certified who runs it, or any of its keys. Until it is, a proof signed here shows only that it was issued by whoever controls this server and this website address.</p>
   <p>Once registered, the member state's authority will issue an <strong>access certificate</strong>: an official statement, signed by the authority and traceable to the EU's trusted lists, that a particular public key belongs to this service. That certified key is used to identify the service to wallets, and this page will link to its entry in the public register.</p>
   {% endif %}
+  <p class="muted">For the Swiss e-ID, the verifier is identified instead by a DID registered in the swiyu identifier and trust registries; the same distinction applies.</p>
   <p class="muted">The state certifies the key used with wallets, not automatically the separate key that signs proofs. We plan to link the two in a way anyone can check, and will describe exactly how here once it's decided.</p>
   <p class="muted">When you share details from a real EU wallet, your wallet app itself shows you the name of the registered service asking, as certified by the state, before you approve anything.{% if mock %} (In test mode no real wallet is used.){% endif %}</p>
 </div>
@@ -132,7 +134,7 @@
     <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
     <tr><td><code>age_over_18</code></td><td>Set only if you chose to show "18+" and it was confirmed; otherwise empty. We never record that someone is under 18.</td></tr>
-    <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
+    <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code> for an EU wallet, <code>swiyu-eid</code> for the Swiss e-ID, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
     <tr><td><code>attestation</code></td><td>The <a href="#signed-copy">signed copy</a> of the proof's details embedded in your proof page (the same facts as the other columns, nothing more); empty while pending</td></tr>
     <tr><td><code>removal_code_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
     <tr><td><code>created_at</code>, <code>status</code>, <code>expires_at</code></td><td>When it was issued, whether it is pending or active, and when a pending proof will be deleted</td></tr>
@@ -190,15 +192,21 @@
   <h2>Standards used</h2>
   <dl class="specs">
     <dt><a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">OpenID for Verifiable Presentations 1.0</a></dt>
-    <dd>How we ask your wallet for specific details (using its DCQL query language) and receive them.</dd>
+    <dd>How we ask your wallet for specific details (using its DCQL query language) and receive them, for both EU wallets and the Swiss e-ID.</dd>
     <dt><a href="https://www.rfc-editor.org/rfc/rfc9901">RFC 9901: Selective Disclosure for JWTs (SD-JWT)</a> and <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-sd-jwt-vc/">SD-JWT VC</a></dt>
-    <dd>The credential format that lets your wallet reveal only some details, such as your name but not your birth date.</dd>
+    <dd>The credential format that lets your wallet reveal only some details, such as your name but not your birth date. Used by both EU wallets and the Swiss e-ID.</dd>
     <dt><a href="https://eur-lex.europa.eu/eli/reg/2024/1183/oj">Regulation (EU) 2024/1183 (eIDAS 2.0)</a>, <a href="https://eur-lex.europa.eu/eli/reg_impl/2024/2977/oj">Implementing Regulation (EU) 2024/2977</a></dt>
     <dd>The EU law behind the European Digital Identity Wallet and the person identification data (PID) it carries.</dd>
     <dt><a href="https://eu-digital-identity-wallet.github.io/eudi-doc-architecture-and-reference-framework/">EUDI Wallet Architecture and Reference Framework</a>, <a href="https://github.com/eu-digital-identity-wallet/eudi-doc-attestation-rulebooks-catalog/blob/main/rulebooks/pid/pid-rulebook.md">PID Rulebook</a></dt>
     <dd>The technical framework for EU wallets and the exact PID attributes we may request.</dd>
     <dt><a href="https://italia.github.io/eid-wallet-it-docs/">IT-Wallet technical specifications</a></dt>
     <dd>Italy's national profile of the EU wallet (the IO app).</dd>
+    <dt><a href="https://swiyu-admin-ch.github.io/">swiyu, the Swiss e-ID trust infrastructure</a>: <a href="https://swiyu-admin-ch.github.io/specifications/swiss-profile-verification/">Swiss Profile Verification</a> and <a href="https://swiyu-admin-ch.github.io/specifications/swiss-profile-trust/">Swiss Profile Trust</a></dt>
+    <dd>Switzerland's e-ID: the same request protocol (OpenID4VP with DCQL) and credential format (SD-JWT VC), with issuers and verifiers identified by DIDs in federal registries instead of EU certificates.</dd>
+    <dt><a href="https://www.w3.org/TR/did-1.0/">W3C Decentralized Identifiers (DIDs)</a> and <a href="https://identity.foundation/didwebvh/"><code>did:webvh</code></a></dt>
+    <dd>How Swiss e-ID issuers and verifiers are identified: each has a DID whose keys and history are published and checked against the swiyu registries.</dd>
+    <dt><a href="https://github.com/eu-digital-identity-wallet/av-doc-technical-specification">EU Age Verification specification</a> and <a href="https://www.iso.org/standard/69084.html">ISO/IEC 18013-5 (mdoc)</a></dt>
+    <dd>For "18+" with EU wallets: the proof-of-age credential, in the mdoc format from the mobile driving licence standard, which answers only "over 18?".</dd>
     <dt><a href="https://microformats.org/wiki/rel-me"><code>rel="me"</code></a> and <a href="https://docs.joinmastodon.org/user/profile/">Mastodon profile verification</a></dt>
     <dd>The two-way link that makes Mastodon show a green check mark.</dd>
     <dt><a href="https://www.w3.org/TR/activitypub/">ActivityPub</a> and <a href="https://www.rfc-editor.org/rfc/rfc7033">RFC 7033: WebFinger</a></dt>

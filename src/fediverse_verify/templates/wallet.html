@@ -11,7 +11,7 @@
   {% if flow.wallet.kind == "form" %}
     <form method="post" action="/wallet/mock">
       <input type="hidden" name="csrf" value="{{ flow.csrf }}">
-      <p class="muted">Mock wallet: type what a real wallet would disclose.</p>
+      <p class="muted">{{ wallet_types[flow.provider].label }}: type what a real wallet would disclose.</p>
       {% if flow.level == "legal_name" %}
         <label for="given_name">Given name</label><input id="given_name" name="given_name" type="text" required>
         <label for="family_name">Family name</label><input id="family_name" name="family_name" type="text" required>
@@ -19,14 +19,14 @@
       {% if flow.include_age %}<label class="choice"><input type="checkbox" name="over_18" value="yes" checked><span>Over 18 (what a proof-of-age credential would confirm)</span></label>{% endif %}
       <label for="issuing_country">Issuing country</label>
       <select id="issuing_country" name="issuing_country">
-        {% for code, name in country_names | dictsort(by="value") %}<option value="{{ code }}"{% if code == "IT" %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        {% for code, name in country_names | dictsort(by="value") %}<option value="{{ code }}"{% if code == mock_country %} selected{% endif %}>{{ name }}</option>{% endfor %}
       </select>
       <label for="issuing_authority">Issuing authority <span class="muted">(optional)</span></label>
       <input id="issuing_authority" name="issuing_authority" type="text" placeholder="e.g. Ministero dell'Interno">
       <button type="submit">Share with verifier</button>
     </form>
   {% else %}
-    <p>Scan with your EU Digital Identity wallet, or <a href="{{ flow.wallet.wallet_url }}">open the wallet on this device</a>.</p>
+    <p>Scan with your {{ wallet_types[flow.provider].wallet_app }}, or <a href="{{ flow.wallet.wallet_url }}">open the wallet on this device</a>.</p>
     <div class="qr">{{ qr_svg | safe }}</div>
     <p class="muted" id="status">Waiting for your wallet…</p>
     <script>

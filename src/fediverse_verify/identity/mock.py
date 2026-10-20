@@ -8,9 +8,12 @@ from . import IdentityResult, WalletRequest
 
 
 class MockProvider:
-    name = "mock"
+    """A form stands in for the wallet. `default_country` preselects the issuing country,
+    so "mock-ch" can imitate the Swiss e-ID in the UI."""
 
-    def __init__(self) -> None:
+    def __init__(self, name: str = "mock", default_country: str = "IT") -> None:
+        self.name = name
+        self.default_country = default_country
         self._results: dict[str, IdentityResult] = {}
 
     async def begin(self, level: str, include_age: bool = False) -> WalletRequest:
