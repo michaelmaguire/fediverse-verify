@@ -24,12 +24,15 @@ class FakeMastodon:
         self.fields: list[dict] = []          # alice's profile fields (name/value HTML)
         self.authorized_fetch = False         # True: refuse unsigned actor fetches, like secure mode
         self.stale_actor_fields: list[dict] | None = None   # set: actor shows these (cache), lookup shows fields
+        self.revoke_fails = False             # True: /oauth/revoke errors
+        self.app_scopes: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
         assert url.host == HOST, f"unexpected request to {url}"
         if url.path == "/api/v1/apps":
             self.apps += 1
+            self.app_scopes.append(parse_qs(request.content.decode())["scopes"][0])
             return httpx.Response(200, json={"client_id": "cid", "client_secret": "csecret"})
         if url.path == "/oauth/token":
             form = parse_qs(request.content.decode())
@@ -51,6 +54,8 @@ class FakeMastodon:
         if url.path == "/api/v1/accounts/lookup":
             return httpx.Response(200, json={"username": "alice", "url": PROFILE_URL, "fields": self.fields})
         if url.path == "/oauth/revoke":
+            if self.revoke_fails:
+                return httpx.Response(503)
             self.revoked.append(parse_qs(request.content.decode())["token"][0])
             return httpx.Response(200, json={})
         return httpx.Response(404)
@@ -98,10 +103,10 @@ def link_field(url: str) -> dict:
 
 
 def verify(client: TestClient, level: str, given: str = "Mario", family: str = "Rossi",
-           binding: str = "mastodon-oauth") -> tuple[str, str]:
-    """Run the whole verify flow with the mock wallet; returns (proof_url, revocation_code)."""
+           binding: str = "mastodon-sign-in") -> tuple[str, str]:
+    """Run the whole verify flow with the mock wallet; returns (proof_url, removal_code)."""
     form = {"handle": f"@alice@{HOST}", "level": level, "binding": binding}
-    if binding == "mastodon-oauth":
+    if binding == "mastodon-sign-in":
         r = sign_in(client, "/verify", form)
     else:
         r = client.post("/verify", data=form)

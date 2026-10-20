@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -11,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import httpx
+import jwt
 import segno
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -36,14 +38,14 @@ PATH_LEVEL = {v: k for k, v in LEVEL_PATH.items()}
 FLOW_TTL = 30 * 60
 PENDING_TTL = 24 * 60 * 60        # unconfirmed link-back proofs are deleted after this
 CHECK_INTERVAL = 5                # seconds between link-back checks of one proof
-BINDINGS = ("link-back", "mastodon-oauth")
+BINDINGS = ("link-back", "mastodon-sign-in")
 
 
 @dataclass
 class Flow:
     purpose: str                                  # "verify" or "revoke"
     level: str = "legal_name"
-    binding: str = "mastodon-oauth"
+    binding: str = "mastodon-sign-in"
     auth: Authorization | None = None
     account: BoundAccount | None = None
     wallet: WalletRequest | None = None
@@ -51,7 +53,7 @@ class Flow:
     created: float = field(default_factory=time.time)
 
 
-def new_revocation_code() -> str:
+def new_removal_code() -> str:
     raw = base64.b32encode(secrets.token_bytes(15)).decode()       # 24 chars, 120 bits
     return "-".join(raw[i:i + 4] for i in range(0, len(raw), 4))
 
@@ -116,7 +118,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         flows.pop(request.session.pop("flow", ""), None)
 
     def proof_url(proof: Proof) -> str:
-        return f"{settings.public_url}/{LEVEL_PATH[proof.level]}/{proof.id}"
+        return f"{settings.public_url}/{LEVEL_PATH[proof.verification_level]}/{proof.id}"
 
     def check_csrf(flow: Flow, token: str) -> None:
         if not secrets.compare_digest(flow.csrf, token):
@@ -148,7 +150,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                            binding_method: str = Form("link-back", alias="binding")):
         if level not in LEVEL_PATH or binding_method not in BINDINGS:
             raise HTTPException(status_code=400, detail="Unknown option.")
-        if binding_method == "mastodon-oauth":
+        if binding_method == "mastodon-sign-in":
             return await begin_sign_in(request, handle, "verify", level)
         try:
             account = await linkback.resolve(handle)
@@ -244,16 +246,17 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         if flow.level == "legal_name" and not name:
             end_flow(request)
             return message(request, "Verification failed", "No name was provided.")
-        proof = Proof(id=secrets.token_urlsafe(12), level=flow.level, subject_uri=account.subject_uri,
-                      profile_url=account.profile_url, handle=account.handle, name=name, method=result.method,
-                      attestation="", created_at=int(time.time()), binding=flow.binding,
+        proof = Proof(id=secrets.token_urlsafe(12), verification_level=flow.level, subject_uri=account.subject_uri,
+                      account_profile_url=account.profile_url, handle=account.handle, name=name,
+                      identity_check_method=result.method, attestation="", created_at=int(time.time()),
+                      account_ownership_check=flow.binding,
                       issuing_country=result.issuing_country, issuing_authority=result.issuing_authority)
         if flow.binding == "link-back":
             # Not live until the account links to it; see /check.
             proof = replace(proof, status="pending", expires_at=proof.created_at + PENDING_TTL)
         else:
             proof = replace(proof, attestation=sign(proof))
-        code = new_revocation_code()
+        code = new_removal_code()
         store.add_proof(proof, code)
         end_flow(request)
         request.session["issued"] = {"id": proof.id, "code": code}
@@ -271,8 +274,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
 
     def sign(proof: Proof) -> str:
         claims = build_claims(issuer=settings.public_url, proof_id=proof.id, subject_uri=proof.subject_uri,
-                              profile_url=proof.profile_url, level=proof.level, method=proof.method,
-                              name=proof.name, binding=proof.binding, issuing_country=proof.issuing_country,
+                              profile_url=proof.account_profile_url, level=proof.verification_level, method=proof.identity_check_method,
+                              name=proof.name, binding=proof.account_ownership_check, issuing_country=proof.issuing_country,
                               issuing_authority=proof.issuing_authority)
         return signer.sign(claims)
 
@@ -285,7 +288,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         wants_json = "application/json" in request.headers.get("accept", "")
         if proof.status == "pending" and time.time() - last_check.get(proof.id, 0) >= CHECK_INTERVAL:
             last_check[proof.id] = time.time()
-            account = BoundAccount(subject_uri=proof.subject_uri, profile_url=proof.profile_url, handle=proof.handle)
+            account = BoundAccount(subject_uri=proof.subject_uri, profile_url=proof.account_profile_url, handle=proof.handle)
             try:
                 linked = await linkback.links_to(account, proof_url(proof))
             except (httpx.HTTPError, UnsafeHostError, BindingError):
@@ -314,7 +317,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
 
     @app.post("/revoke/code", response_class=HTMLResponse)
     async def revoke_with_code(request: Request, code: str = Form(...)):
-        proof = store.delete_by_revocation_code(code)
+        proof = store.delete_by_removal_code(code)
         if proof is None:
             return message(request, "Code not recognised", "Check the code and try again. "
                            "If the proof was already revoked, there is nothing left to remove.", 404)
@@ -352,7 +355,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     # ---- public proof pages (registered last: their catch-all paths would shadow other routes) ----
     def load_proof(prefix: str, proof_id: str) -> Proof:
         proof = store.get_proof(proof_id)
-        if proof is None or PATH_LEVEL.get(prefix) != proof.level:
+        if proof is None or PATH_LEVEL.get(prefix) != proof.verification_level:
             raise HTTPException(status_code=404)
         return proof
 
@@ -369,7 +372,12 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         if prefix not in PATH_LEVEL:
             raise HTTPException(status_code=404)
         proof = load_proof(prefix, proof_id)
+        claims_json = ""
+        if proof.status == "active":
+            claims = jwt.decode(proof.attestation, options={"verify_signature": False})   # our own token
+            claims_json = json.dumps(claims, indent=2, ensure_ascii=False)
         response = render(request, "proof.html", proof=proof, url=proof_url(proof), checked=bool(checked),
+                          claims_json=claims_json,
                           verified_on=time.strftime("%Y-%m-%d", time.gmtime(proof.created_at)))
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return response

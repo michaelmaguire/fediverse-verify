@@ -1,0 +1,4 @@
+{% if flow.account and not flow.account.token_revoked %}
+<div class="banner">We couldn't confirm that your server cancelled the one-time sign-in permission we used. It can only read your account details, but to be sure, remove "{{ settings.app_name }}" from your
+  <a href="https://{{ flow.account.server }}/oauth/authorized_applications">authorized apps</a> on {{ flow.account.server }}.</div>
+{% endif %}

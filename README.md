@@ -20,7 +20,7 @@ Design and decisions: [`docs/overview.md`](https://github.com/michaelmaguire/fed
    - a signed attestation (ES256 JWS, `typ: identity-attestation+jwt`), embedded and at `<page>.jwt`, verifiable with `/.well-known/jwks.json`.
 5. **The user gets a one-time removal code** to remove the proof later, even without the account.
 
-Attestation claims: `iss`, `sub` (ActivityPub actor URI), `jti`, `iat`, `profile_url`, `level` (`person` | `legal_name`), `method` (`eudi-pid` | `mock`), `binding` (`link-back` | `mastodon-oauth`), `issuing_country`, `issuing_authority`, and `name` (legal_name only). There is no `exp`: proofs last until revoked.
+Signed-copy claims: `iss`, `sub` (ActivityPub actor URI), `iat`, `jti` (registered JWT claims), `account_profile_url`, `verification_level` (`person` | `legal_name`), `identity_check_method` (`eudi-pid` | `mock`), `account_ownership_check` (`link-back` | `mastodon-sign-in`), `issuing_country`, `issuing_authority` (EU PID rulebook names), and `name` (legal_name only; OpenID Connect name). There is no `exp`: proofs last until revoked.
 
 ## Data kept
 

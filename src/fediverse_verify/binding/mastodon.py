@@ -79,7 +79,10 @@ class MastodonBinding:
         client = self._store.get_client(host, self._redirect_uri)
         if client is None:
             raise BindingError("unknown server; start again")
+        # The access token (scope read:accounts only) lives in this local variable for this
+        # one request: it is never written to disk, the database or logs, and is revoked below.
         token = await self._exchange(client, code, code_verifier)
+        revoked = False
         try:
             account = await self._get_json(host, "/api/v1/accounts/verify_credentials", token=token)
             username, profile_url = account["username"], account["url"]
@@ -89,9 +92,10 @@ class MastodonBinding:
                 raise BindingError(str(e)) from e
             subject_uri, handle_domain = found.actor_uri, found.handle_domain
         finally:
-            await self._revoke(client, token)   # we only needed the token once
+            revoked = await self._revoke(client, token)   # we only needed the token once
+            del token
         return BoundAccount(subject_uri=subject_uri, profile_url=profile_url,
-                            handle=f"@{username}@{handle_domain}")
+                            handle=f"@{username}@{handle_domain}", token_revoked=revoked, server=host)
 
     # ---- internals ----
     async def _client_for(self, host: str) -> OAuthClient:
@@ -101,7 +105,7 @@ class MastodonBinding:
         resp = await self._http.post(f"https://{host}/api/v1/apps", data={
             "client_name": self._app_name,
             "redirect_uris": self._redirect_uri,
-            "scopes": SCOPES + " write:accounts",
+            "scopes": SCOPES,              # read:accounts only; nothing more is ever requested
             "website": self._website,
         })
         if resp.status_code != 200:
@@ -125,13 +129,15 @@ class MastodonBinding:
             raise BindingError("sign-in failed; please try again")
         return resp.json()["access_token"]
 
-    async def _revoke(self, client: OAuthClient, token: str) -> None:
+    async def _revoke(self, client: OAuthClient, token: str) -> bool:
+        """Cancel the access token on the user's server (RFC 7009). True if the server confirmed."""
         try:
-            await self._http.post(f"https://{client.host}/oauth/revoke", data={
+            resp = await self._http.post(f"https://{client.host}/oauth/revoke", data={
                 "client_id": client.client_id, "client_secret": client.client_secret, "token": token,
             })
         except httpx.HTTPError:
-            pass
+            return False
+        return resp.status_code == 200
 
     async def _get_json(self, host: str, path: str, *, token: str | None = None, params=None) -> dict:
         headers = {"Authorization": f"Bearer {token}"} if token else {}

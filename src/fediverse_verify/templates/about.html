@@ -25,12 +25,45 @@
 <div class="card">
   <h2>How it works</h2>
   <ol>
-    <li><strong>You confirm the account is yours</strong>, either by linking to your proof from your profile (we then check your public profile), or by signing in with Mastodon (we read your public profile once and immediately discard the sign-in token).</li>
+    <li><strong>You confirm the account is yours</strong>, either by linking to your proof from your profile (we then check your public profile), or by <a href="#sign-in">signing in with Mastodon</a> (your server lets us read your account details once, then we cancel that permission).</li>
     <li><strong>Your wallet shares only what the chosen level needs.</strong> The request uses OpenID for Verifiable Presentations; your wallet shows exactly what is asked and you approve it. The credential's signature is checked against the issuing government's keys.</li>
     <li><strong>We publish a proof page</strong> that links back to your profile with <code>rel="me"</code>. When your profile links to the page, Mastodon shows a green check mark next to that link.</li>
-    <li><strong>The page carries a signed statement</strong> (a JSON Web Token signed by this verifier) so that anyone, including Fediverse servers that choose to trust this verifier, can check it independently using our <a href="/.well-known/jwks.json">public keys</a>.</li>
+    <li><strong>The page also carries a <a href="#signed-copy">signed copy</a> of the proof's details</strong>, so that anyone, including Fediverse servers that choose to trust this verifier, can check for themselves that it came from us and hasn't been altered.</li>
   </ol>
   {% if mock %}<p class="banner">This server is in test mode: no real wallet or ID is involved, and its proofs are marked "mock".</p>{% endif %}
+</div>
+
+<div class="card" id="signed-copy">
+  <h2>The signed copy</h2>
+  <p>Every proof page contains a copy of the proof's details that this verifier has <strong>digitally signed</strong>. A signature works like a tamper-evident seal: using our <a href="/.well-known/jwks.json">public key</a>, anyone can check that the copy really was issued here and that not a single character has been changed since. That lets other services rely on a proof without having to trust the web page around it.</p>
+  <p>It holds exactly the facts shown on the proof page, nothing more:</p>
+  <table class="data">
+    <tr><th>Field</th><th>Example</th><th>Meaning</th></tr>
+    <tr><td><code>"iss"</code></td><td><code>https://verify.example.org</code></td><td>Issued by this verifier</td></tr>
+    <tr><td><code>"sub"</code></td><td><code>https://example.social/users/alice</code></td><td>The account (its ActivityPub ID)</td></tr>
+    <tr><td><code>"account_profile_url"</code></td><td><code>https://example.social/@alice</code></td><td>The account's profile page</td></tr>
+    <tr><td><code>"verification_level"</code></td><td><code>legal_name</code></td><td>Verified name, or <code>person</code> for Verified person</td></tr>
+    <tr><td><code>"name"</code></td><td><code>Mario Rossi</code></td><td>The legal name, only for the Verified name level</td></tr>
+    <tr><td><code>"issuing_country"</code></td><td><code>IT</code></td><td>Country that issued the ID</td></tr>
+    <tr><td><code>"issuing_authority"</code></td><td><code>Ministero dell'Interno</code></td><td>Authority that issued the ID</td></tr>
+    <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked (<code>mock</code> in test mode)</td></tr>
+    <tr><td><code>"account_ownership_check"</code></td><td><code>link-back</code></td><td>How the account was proven yours (or <code>mastodon-sign-in</code>)</td></tr>
+    <tr><td><code>"iat"</code></td><td><code>1792500000</code></td><td>When it was issued, in seconds since 1970</td></tr>
+    <tr><td><code>"jti"</code></td><td><code>6q3yJY3bcSvJOlvk</code></td><td>The proof's ID, as in its link</td></tr>
+  </table>
+  <p class="muted">The short names <code>iss</code>, <code>sub</code>, <code>iat</code> and <code>jti</code> are fixed by the <a href="https://www.rfc-editor.org/rfc/rfc7519#section-4.1">JSON Web Token standard</a>, <code>name</code> follows OpenID Connect, and the issuer fields use the EU PID rulebook's names. Technically it's a <a href="https://www.rfc-editor.org/rfc/rfc7519">JSON Web Token</a> signed with ES256. It's in the proof page's source, and each proof page has a "What's in the signed copy?" section showing its contents. You can also download it by adding <code>.jwt</code> to the proof link.</p>
+</div>
+
+<div class="card" id="sign-in">
+  <h2>"Sign in with Mastodon": what we receive</h2>
+  <p>This uses <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth</a>, the standard behind "Sign in with…" buttons. You type your password <strong>only into your own Mastodon server</strong>; we never see it.</p>
+  <ol>
+    <li>Your server asks you to approve "{{ settings.app_name }}" with one permission, <code>read:accounts</code>: reading your account details (name, handle, profile). It cannot post, read your private messages or notifications, follow anyone, or change any setting.</li>
+    <li>When you approve, your server gives us a one-time <strong>access token</strong> for that permission. We use it for a single request, to read your own account details, which tells us the account is yours.</li>
+    <li>We then immediately ask your server to <a href="https://www.rfc-editor.org/rfc/rfc7009">cancel the token</a>. From then on it no longer works.</li>
+  </ol>
+  <p>The token exists only in this service's memory during that one sign-in request, typically less than a second, and is never written to disk, the database or any log. It is not your password or a login session: even while it exists, it can't be used to log in as you or act as you.</p>
+  <p class="muted">If your server doesn't confirm the cancellation (for example because of a network error), we tell you straight away, with a link to remove "{{ settings.app_name }}" from your server's authorized apps yourself. You can always see and remove it yourself in your Mastodon settings under Account → Authorized apps.</p>
 </div>
 
 <div class="card">
@@ -43,14 +76,14 @@
         <li>The level, the date, and how you confirmed the account</li>
         <li>Your legal name, <em>only</em> for the Verified name level</li>
         <li>The country and authority that issued your ID</li>
-        <li>The signed statement shown on the proof page</li>
+        <li>A <a href="#signed-copy">signed copy</a> of these same details, as embedded in your proof page</li>
         <li>A one-way hash of your removal code (not the code itself)</li>
       </ul></td>
       <td>
       <ul>
         <li>ID numbers, tax codes, birth dates or places, home addresses, photos</li>
         <li>The credential from your wallet</li>
-        <li>Your sign-in token (discarded right after use)</li>
+        <li>Your Mastodon password, or anything that could log in as you (<a href="#sign-in">details</a>)</li>
         <li>Anything linking two proofs to the same person</li>
       </ul></td></tr>
   </table>
@@ -65,13 +98,13 @@
   <table class="data">
     <tr><th>Column</th><th>Contents</th></tr>
     <tr><td><code>id</code></td><td>Random ID used in the proof link</td></tr>
-    <tr><td><code>level</code></td><td><code>legal_name</code> or <code>person</code></td></tr>
-    <tr><td><code>subject_uri</code>, <code>profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub ID (a web link such as <code>https://example.social/users/alice</code>), its profile page link, and your handle such as <code>@alice@example.social</code> (all public already)</td></tr>
+    <tr><td><code>verification_level</code></td><td><code>legal_name</code> or <code>person</code></td></tr>
+    <tr><td><code>subject_uri</code>, <code>account_profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub ID (a web link such as <code>https://example.social/users/alice</code>), its profile page link, and your handle such as <code>@alice@example.social</code> (all public already)</td></tr>
     <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
-    <tr><td><code>method</code>, <code>binding</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
-    <tr><td><code>attestation</code></td><td>The signed statement shown on your proof page (the same facts as above); empty while pending</td></tr>
-    <tr><td><code>revocation_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
+    <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
+    <tr><td><code>attestation</code></td><td>The <a href="#signed-copy">signed copy</a> of the proof's details embedded in your proof page (the same facts as the other columns, nothing more); empty while pending</td></tr>
+    <tr><td><code>removal_code_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
     <tr><td><code>created_at</code>, <code>status</code>, <code>expires_at</code></td><td>When it was issued, whether it is pending or active, and when a pending proof will be deleted</td></tr>
   </table>
   <p>These values are stored as plain text: apart from the removal code, they are what your proof page publishes anyway. The file is protected by the server's normal disk permissions.</p>
@@ -143,7 +176,7 @@
     <dt><a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0</a>, <a href="https://www.rfc-editor.org/rfc/rfc7636">PKCE</a>, <a href="https://www.rfc-editor.org/rfc/rfc7009">token revocation</a></dt>
     <dd>"Sign in with Mastodon", with the token revoked straight after use.</dd>
     <dt><a href="https://www.rfc-editor.org/rfc/rfc7519">JWT</a>, <a href="https://www.rfc-editor.org/rfc/rfc7515">JWS</a>, <a href="https://www.rfc-editor.org/rfc/rfc7518">JWA (ES256)</a>, <a href="https://www.rfc-editor.org/rfc/rfc7517">JWK</a>, <a href="https://www.rfc-editor.org/rfc/rfc7638">JWK thumbprint</a></dt>
-    <dd>The signed statement on each proof page and the public keys to check it.</dd>
+    <dd>The format of the <a href="#signed-copy">signed copy</a> on each proof page, and of the public keys used to check it.</dd>
     <dt><a href="https://codeberg.org/fediverse/fep/src/branch/main/fep/c390/fep-c390.md">FEP-c390: Identity Proofs</a></dt>
     <dd>Related Fediverse proposal for linking identities to accounts; this verifier aims to align with Fediverse Enhancement Proposals over time.</dd>
   </dl>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
+{% include "_token_warning.html" %}
 <div class="card">
   <h1>Confirm with your wallet</h1>
   <p>Account: <strong>{{ flow.account.handle }}</strong>.

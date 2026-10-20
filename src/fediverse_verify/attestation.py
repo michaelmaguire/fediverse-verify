@@ -54,9 +54,14 @@ class Signer:
 
 def build_claims(*, issuer: str, proof_id: str, subject_uri: str, profile_url: str,
                  level: str, method: str, name: str | None = None,
-                 binding: str = "mastodon-oauth", issuing_country: str | None = None,
+                 binding: str = "mastodon-sign-in", issuing_country: str | None = None,
                  issuing_authority: str | None = None) -> dict[str, Any]:
-    """No `exp`: proofs stay valid until revoked (see docs/overview.md#decided)."""
+    """Claims of the signed copy. No `exp`: proofs stay valid until revoked (docs/overview.md#decided).
+
+    iss/sub/iat/jti are registered JWT claims (RFC 7519); name is OpenID Connect's;
+    issuing_country/issuing_authority are EU PID rulebook names. The rest are ours,
+    named to be self-explanatory.
+    """
     if level not in LEVELS:
         raise ValueError(f"unknown level {level!r}")
     claims: dict[str, Any] = {
@@ -64,10 +69,10 @@ def build_claims(*, issuer: str, proof_id: str, subject_uri: str, profile_url: s
         "sub": subject_uri,
         "jti": proof_id,
         "iat": int(time.time()),
-        "profile_url": profile_url,
-        "level": level,
-        "method": method,
-        "binding": binding,       # how control of the account was proven
+        "account_profile_url": profile_url,
+        "verification_level": level,
+        "identity_check_method": method,
+        "account_ownership_check": binding,
     }
     if issuing_country:
         claims["issuing_country"] = issuing_country

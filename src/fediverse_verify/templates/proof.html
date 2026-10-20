@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{% if proof.status == "pending" %}Verification pending{% else %}{{ "Verified name" if proof.level == "legal_name" else "Verified person" }}{% endif %}: {{ proof.handle }}{% endblock %}
+{% block title %}{% if proof.status == "pending" %}Verification pending{% else %}{{ "Verified name" if proof.verification_level == "legal_name" else "Verified person" }}{% endif %}: {{ proof.handle }}{% endblock %}
 {% block head %}
-<link rel="me" href="{{ proof.profile_url }}">
+<link rel="me" href="{{ proof.account_profile_url }}">
 <meta name="robots" content="noindex, nofollow, noarchive">
 {% if proof.status == "active" %}
 <link rel="alternate" type="application/jwt" href="{{ url }}.jwt">
@@ -10,22 +10,27 @@
 {% endblock %}
 {% block body %}
 <div class="card">
-  {% if proof.method == "mock" %}<div class="banner">TEST PROOF: no real identity was checked.</div>{% endif %}
+  {% if proof.identity_check_method == "mock" %}<div class="banner">TEST PROOF: no real identity was checked.</div>{% endif %}
   {% if proof.status == "pending" %}
     <h1>Verification pending</h1>
-    <p>Waiting for <a href="{{ proof.profile_url }}" rel="me">{{ proof.handle }}</a> to link to this page from its profile. Nothing is confirmed yet.</p>
+    <p>Waiting for <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> to link to this page from its profile. Nothing is confirmed yet.</p>
     {% if checked %}<p><strong>We checked, but the profile doesn't link here yet.</strong> Make sure you saved it with exactly this link as a field value.</p>{% endif %}
     <form method="post" action="/check/{{ proof.id }}"><button type="submit">Check now</button></form>
     <p class="muted">Unconfirmed proofs are deleted on {{ proof.expires_at | date }}.</p>
-  {% elif proof.level == "legal_name" %}
+  {% elif proof.verification_level == "legal_name" %}
     <h1>Verified name</h1>
-    <p>The account <a href="{{ proof.profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by <strong>{{ proof.name }}</strong>, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>.</p>
+    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by <strong>{{ proof.name }}</strong>, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>.</p>
   {% else %}
     <h1>Verified person</h1>
-    <p>The account <a href="{{ proof.profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by a real person, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>. No other personal details were published.</p>
+    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by a real person, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>. No other personal details were published.</p>
   {% endif %}
   {% if proof.status == "active" %}
-  <p class="muted">Issued by {{ settings.public_url }}. The signed attestation is embedded in this page and available at <a href="{{ url }}.jwt">{{ url }}.jwt</a>; verify it with the keys at <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>.</p>
+  <details>
+    <summary>What's in the signed copy?</summary>
+    <p class="muted">This page carries a copy of these details, digitally signed by {{ settings.public_url }}, so anyone can check it was issued here and hasn't been altered (<a href="/about#signed-copy">how it works</a>). Its contents:</p>
+    <pre class="code">{{ claims_json }}</pre>
+    <p class="muted">Download: <a href="{{ url }}.jwt">{{ url }}.jwt</a> · Public key: <a href="/.well-known/jwks.json">/.well-known/jwks.json</a></p>
+  </details>
   {% endif %}
 </div>
 {% endblock %}

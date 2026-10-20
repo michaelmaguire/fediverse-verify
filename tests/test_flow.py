@@ -51,7 +51,7 @@ def test_person_proof_publishes_no_name(client):
     page = client.get(path_of(url)).text
     assert "Rossi" not in page
     claims = jwt.decode(client.get(path_of(url) + ".jwt").text, options={"verify_signature": False})
-    assert claims["level"] == "person" and "name" not in claims
+    assert claims["verification_level"] == "person" and "name" not in claims
 
 
 def test_attestation_verifies_with_published_jwks(client):
@@ -63,9 +63,9 @@ def test_attestation_verifies_with_published_jwks(client):
     assert header["kid"] == key.key_id and header["typ"] == "identity-attestation+jwt"
     claims = jwt.decode(token, key.key, algorithms=["ES256"], issuer="https://verify.test")
     assert claims["sub"] == ACTOR_URI
-    assert claims["profile_url"] == PROFILE_URL
+    assert claims["account_profile_url"] == PROFILE_URL
     assert claims["name"] == "Mario Rossi"
-    assert claims["method"] == "mock"
+    assert claims["identity_check_method"] == "mock"
     assert "exp" not in claims                               # proofs don't expire
 
 
@@ -86,14 +86,14 @@ def test_one_app_registration_per_server(client, mastodon):
 
 
 def test_callback_rejects_wrong_state(client):
-    r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-oauth"})
+    r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
     assert r.status_code == 303
     r = client.get("/auth/mastodon/callback", params={"code": "good-code", "state": "forged"})
     assert "cancelled" in r.text
 
 
 def test_mock_form_requires_csrf(client):
-    sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-oauth"})
+    sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
     assert client.post("/wallet/mock", data={"csrf": "wrong"}).status_code == 400
 
 
@@ -186,7 +186,7 @@ def test_link_back_proof_is_pending_until_profile_links(client, mastodon):
     page = client.get(path_of(url)).text
     assert "Mario Rossi" in page and "identity-attestation" in page
     claims = jwt.decode(client.get(path_of(url) + ".jwt").text, options={"verify_signature": False})
-    assert claims["binding"] == "link-back" and claims["sub"] == ACTOR_URI
+    assert claims["account_ownership_check"] == "link-back" and claims["sub"] == ACTOR_URI
 
 
 def test_link_back_falls_back_to_lookup_api_under_authorized_fetch(client, mastodon, monkeypatch):
@@ -261,7 +261,7 @@ def test_footer_links_exact_commit_only_when_clean(client, monkeypatch, settings
 
 def test_both_levels_show_issuing_country_and_authority(client):
     for level in ("legal_name", "person"):
-        r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": level, "binding": "mastodon-oauth"})
+        r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": level, "binding": "mastodon-sign-in"})
         auth = parse_qs(urlparse(r.headers["location"]).query)
         client.get("/auth/mastodon/callback", params={"code": "good-code", "state": auth["state"][0]})
         page = client.get("/wallet").text
@@ -359,3 +359,65 @@ def test_about_states_disk_encryption_truthfully(tmp_path, mastodon):
                          http=httpx.AsyncClient(transport=httpx.MockTransport(mastodon.handler)))
         with TestClient(app, base_url="https://verify.test") as c:
             assert expected in c.get("/about").text
+
+
+def test_proof_page_shows_signed_copy_contents(client):
+    url, _ = verify(client, "legal_name")
+    import html
+    page = html.unescape(client.get(path_of(url)).text)
+    shown = page.split("What's in the signed copy?")[1].split("</details>")[0]
+    token = client.get(path_of(url) + ".jwt").text
+    for key, value in jwt.decode(token, options={"verify_signature": False}).items():
+        assert f'"{key}"' in shown and str(value) in shown
+
+
+def test_about_example_lists_every_signed_field(client):
+    from fediverse_verify.attestation import build_claims
+    import html
+    example = html.unescape(client.get("/about").text).split('id="signed-copy"')[1].split("</pre>")[0]
+    claims = build_claims(issuer="i", proof_id="p", subject_uri="s", profile_url="u", level="legal_name",
+                          method="m", name="n", binding="b", issuing_country="IT", issuing_authority="a")
+    for key in claims:
+        assert f'"{key}"' in example, f"{key} missing from the /about example"
+
+
+def test_app_registration_requests_only_read_accounts(client, mastodon):
+    verify(client, "person")
+    assert mastodon.app_scopes == ["read:accounts"]
+
+
+def test_failed_token_cancellation_is_reported(client, mastodon):
+    mastodon.revoke_fails = True
+    r = sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
+    page = client.get("/wallet").text
+    assert "couldn&#39;t confirm" in page or "couldn't confirm" in page
+    assert f"https://{HOST}/oauth/authorized_applications" in page
+
+
+def test_no_warning_when_token_is_cancelled(client, mastodon):
+    sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
+    assert "authorized_applications" not in client.get("/wallet").text
+    assert mastodon.revoked == ["tok"]
+
+
+def test_old_databases_are_migrated(tmp_path):
+    """A database from before the 2026-10-20 renames opens with data intact."""
+    import sqlite3
+    from fediverse_verify.store import Store, hash_removal_code
+    db = sqlite3.connect(tmp_path / "old.sqlite3")
+    db.executescript("""
+        CREATE TABLE proofs (id TEXT PRIMARY KEY, level TEXT NOT NULL CHECK (level IN ('person','legal_name')),
+            subject_uri TEXT NOT NULL, profile_url TEXT NOT NULL, handle TEXT NOT NULL, name TEXT,
+            method TEXT NOT NULL, attestation TEXT NOT NULL, revocation_hash TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'active', binding TEXT NOT NULL,
+            expires_at INTEGER);
+    """)
+    db.execute("INSERT INTO proofs VALUES ('p1','legal_name','s','u','@a@x','Mario','mock','tok',?,1,'active','mastodon-oauth',NULL)",
+               (hash_removal_code("ABCD-EFGH"),))
+    db.commit(); db.close()
+    store = Store(tmp_path / "old.sqlite3")
+    proof = store.get_proof("p1")
+    assert proof.verification_level == "legal_name" and proof.account_profile_url == "u"
+    assert proof.identity_check_method == "mock" and proof.account_ownership_check == "mastodon-sign-in"
+    assert proof.issuing_country is None
+    assert store.delete_by_removal_code("abcd efgh").id == "p1"

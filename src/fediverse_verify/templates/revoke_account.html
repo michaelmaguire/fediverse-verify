@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block body %}
+{% include "_token_warning.html" %}
 <div class="card">
   <h1>Proofs for {{ flow.account.handle }}</h1>
   {% if proofs %}
-    <ul>{% for p in proofs %}<li><a href="{{ url_for_proof(p) }}">{{ "Verified name" if p.level == "legal_name" else "Verified person" }}</a>
-      ({{ p.method }}, {{ issuer_label(p.issuing_country, p.issuing_authority) }}, issued {{ p.created_at | date }})</li>{% endfor %}</ul>
+    <ul>{% for p in proofs %}<li><a href="{{ url_for_proof(p) }}">{{ "Verified name" if p.verification_level == "legal_name" else "Verified person" }}</a>
+      ({{ p.identity_check_method }}, {{ issuer_label(p.issuing_country, p.issuing_authority) }}, issued {{ p.created_at | date }})</li>{% endfor %}</ul>
     <form method="post" action="/revoke/account">
       <input type="hidden" name="csrf" value="{{ flow.csrf }}">
       <button class="danger" type="submit">Remove all {{ proofs | length }} proof(s)</button>
