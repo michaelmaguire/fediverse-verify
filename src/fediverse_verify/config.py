@@ -24,6 +24,8 @@ class Settings:
     source_url: str = "https://github.com/michaelmaguire/fediverse-verify"
     operator_contact: str = ""            # shown on /about for removal requests (email or URL)
     storage_encrypted: bool = False        # set by deployments that keep the data folder on an encrypted disk
+    rp_registrar: str = ""                 # e.g. "AgID (Italy)": who registered us as a wallet relying party
+    rp_register_url: str = ""              # link to our entry in that registrar's public register
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -43,4 +45,6 @@ class Settings:
             source_url=os.environ.get("VERIFIER_SOURCE_URL", "https://github.com/michaelmaguire/fediverse-verify"),
             operator_contact=os.environ.get("VERIFIER_OPERATOR_CONTACT", ""),
             storage_encrypted=_bool("VERIFIER_STORAGE_ENCRYPTED"),
+            rp_registrar=os.environ.get("VERIFIER_RP_REGISTRAR", ""),
+            rp_register_url=os.environ.get("VERIFIER_RP_REGISTER_URL", ""),
         )

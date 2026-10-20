@@ -82,6 +82,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                                  build=buildinfo.detect(settings.source_url))
     templates.env.filters["date"] = lambda ts: time.strftime("%Y-%m-%d", time.gmtime(ts))
     templates.env.globals.update(issuer_label=issuer_label, country_names=COUNTRY_NAMES)
+    templates.env.globals.update(signing_key_id=signer.kid)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):

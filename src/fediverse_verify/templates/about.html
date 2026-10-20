@@ -66,6 +66,23 @@
   <p class="muted">If your server doesn't confirm the cancellation (for example because of a network error), we tell you straight away, with a link to remove "{{ settings.app_name }}" from your server's authorized apps yourself. You can always see and remove it yourself in your Mastodon settings under Account → Authorized apps.</p>
 </div>
 
+<div class="card" id="keys">
+  <h2>Keys, signatures and official registration</h2>
+  <p>Signatures use a <strong>key pair</strong>. The <strong>private key</strong> is kept secret on this server and is the only thing that can create our signatures. The matching <strong>public key</strong> is <a href="/.well-known/jwks.json">published</a> so that anyone can check them. If someone altered a proof, or made a fake one, the check against our public key would fail.</p>
+  <p>Our current signing key has the ID <code>{{ signing_key_id }}</code> (ES256, curve P-256). The ID is a fingerprint of the public key (<a href="https://www.rfc-editor.org/rfc/rfc7638">RFC 7638</a>), so you can compare it with what other services show for a proof signed here.</p>
+
+  <h3>Who stands behind this key</h3>
+  {% if settings.rp_register_url %}
+  <p>This verifier is registered as a relying party for EU Digital Identity Wallets with <strong>{{ settings.rp_registrar or "a member state registrar" }}</strong>. Anyone can look up <a href="{{ settings.rp_register_url }}">our entry in the public register</a>: it shows who runs this service and which details it is allowed to request.</p>
+  <p>As part of that registration, the member state's authority issued us an <strong>access certificate</strong>: an official statement, signed by the authority, that a particular public key belongs to us. That certified key is the one we use to identify ourselves to wallets. It is separate from the proof-signing key above, which we generated ourselves.</p>
+  {% else %}
+  <p><strong>This verifier is not registered with any EU member state yet.</strong> So no official authority has certified who runs it, or any of its keys. Until it is, a proof signed here shows only that it was issued by whoever controls this server and this website address.</p>
+  <p>Once registered, the member state's authority will issue an <strong>access certificate</strong>: an official statement, signed by the authority and traceable to the EU's trusted lists, that a particular public key belongs to this service. That certified key is used to identify the service to wallets, and this page will link to its entry in the public register.</p>
+  {% endif %}
+  <p class="muted">The state certifies the key used with wallets, not automatically the separate key that signs proofs. We plan to link the two in a way anyone can check, and will describe exactly how here once it's decided.</p>
+  <p class="muted">When you share details from a real EU wallet, your wallet app itself shows you the name of the registered service asking, as certified by the state, before you approve anything.{% if mock %} (In test mode no real wallet is used.){% endif %}</p>
+</div>
+
 <div class="card">
   <h2>What we store, and what we don't</h2>
   <table class="data">
@@ -113,7 +130,7 @@
   <p>Created only when someone uses "Sign in with Mastodon". The first sign-in from a Mastodon server registers this verifier as an app on that server, which hands back an app ID and secret (<code>host</code>, <code>client_id</code>, <code>client_secret</code>, <code>redirect_uri</code>, <code>created_at</code>). They identify this verifier, not you, and are reused for later sign-ins from the same server. They are not deleted when proofs are removed, so for a server with a single user, the registration does show that its owner signed in here at least once. Linking from your profile instead never creates one.</p>
 
   <h3>File <code>signing-key.pem</code></h3>
-  <p>The verifier's private signing key. It contains no personal data; its public half is published at <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>.</p>
+  <p>The verifier's private signing key (<a href="#keys">what it's for</a>). It contains no personal data; its public half is published at <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>.</p>
 
   <details><summary>The database schema, exactly as the running code creates it</summary><pre class="code">{{ schema }}</pre></details>
 

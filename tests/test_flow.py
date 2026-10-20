@@ -421,3 +421,21 @@ def test_old_databases_are_migrated(tmp_path):
     assert proof.identity_check_method == "mock" and proof.account_ownership_check == "mastodon-sign-in"
     assert proof.issuing_country is None
     assert store.delete_by_removal_code("abcd efgh").id == "p1"
+
+
+def test_about_explains_keys_and_registration_status(tmp_path, mastodon):
+    import httpx
+    from dataclasses import replace
+    from fastapi.testclient import TestClient
+    from fediverse_verify.app import create_app
+    from fediverse_verify.config import Settings
+    base = Settings(public_url="https://verify.test", data_dir=tmp_path, session_secret="s")
+    for settings, expected in ((base, "not registered with any EU member state yet"),
+                               (replace(base, rp_registrar="AgID (Italy)", rp_register_url="https://register.example/rp/42"),
+                                'href="https://register.example/rp/42"')):
+        app = create_app(settings, http=httpx.AsyncClient(transport=httpx.MockTransport(mastodon.handler)))
+        with TestClient(app, base_url="https://verify.test") as c:
+            page = c.get("/about").text
+            assert expected in page
+            kid = c.get("/.well-known/jwks.json").json()["keys"][0]["kid"]
+            assert f"<code>{kid}</code>" in page          # the key ID shown matches the published key

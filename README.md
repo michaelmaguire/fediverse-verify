@@ -59,6 +59,8 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 | `VERIFIER_GIT_COMMIT` | from `git`, else unknown | Commit shown in the footer; set by the `GIT_COMMIT` build arg (`<sha>` or `<sha>-dirty`). Only a clean commit is linked. |
 | `VERIFIER_OPERATOR_CONTACT` | — | Shown on `/about` for removal requests from people who lost both account and code |
 | `VERIFIER_STORAGE_ENCRYPTED` | `false` | Set when the data folder is on an encrypted disk (the `deploy/` recipe does); `/about` says so |
+| `VERIFIER_RP_REGISTRAR` | — | Who registered this verifier as a wallet relying party (e.g. `AgID (Italy)`); shown on `/about` |
+| `VERIFIER_RP_REGISTER_URL` | — | Link to its entry in the public register. Unset: `/about` says the verifier is not registered |
 
 ## Status
 
