@@ -131,22 +131,126 @@ def two_wallet_client(settings, mastodon):
         yield c
 
 
-def test_start_page_offers_a_choice_only_with_several_wallets(client, two_wallet_client):
-    assert "Your digital ID" not in client.get("/").text
-    page = two_wallet_client.get("/").text
-    assert "Your digital ID" in page and 'value="mock-ch"' in page
+def test_start_page_never_asks_which_system(client, two_wallet_client):
+    for c in (client, two_wallet_client):
+        page = c.get("/").text
+        assert "Your digital ID" not in page and 'name="wallet"' not in page
 
 
-def test_swiss_style_flow_says_switzerland(two_wallet_client):
+def signed_in(c, level="person", show_age=False):
     from .conftest import sign_in
-    c = two_wallet_client
-    r = sign_in(c, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in",
-                               "wallet": "mock-ch"})
+    form = {"handle": f"@alice@{HOST}", "level": level, "binding": "mastodon-sign-in"}
+    if show_age:
+        form["show_age"] = "yes"
+    r = sign_in(c, "/verify", form)
     assert r.headers["location"] == "/wallet"
-    page = c.get("/wallet").text
-    assert '<option value="CH" selected>' in page and "Swiss-style" in page
-    r = c.post("/wallet/mock", data={"csrf": csrf_from(page), "issuing_country": "CH"})
-    c.get(r.headers["location"])
+    return c.get("/wallet").text
+
+
+def choose(c, page, wallet):
+    r = c.post("/wallet/choose", data={"csrf": csrf_from(page), "wallet": wallet})
+    assert r.status_code == 303, r.text[:300]
+    return c.get("/wallet").text
+
+
+def test_one_system_goes_straight_to_its_qr_code(client):
+    page = signed_in(client)
+    assert "Which ID app do you have?" not in page and "/present?request_uri=" in page
+    assert "Use a different ID app" not in page
+
+
+def test_several_systems_ask_which_app_then_open_only_that_one(two_wallet_client):
+    c = two_wallet_client
+    page = signed_in(c)
+    assert "Which ID app do you have?" in page and "/present?request_uri=" not in page   # nothing opened yet
+    page = choose(c, page, "mock-ch")
+    assert "Swiss e-ID (test)" in page and "/ch/present?request_uri=" in page and "/eu/present" not in page
+
+
+def test_switching_apps_closes_the_first_request(two_wallet_client):
+    import re
+    from urllib.parse import parse_qs, urlparse
+    c = two_wallet_client
+    eu_page = choose(c, signed_in(c), "mock")
+    href = html.unescape(re.search(r'href="([^"]*/present\?request_uri=[^"]*)"', eu_page).group(1))
+    request_path = urlparse(parse_qs(urlparse(href).query)["request_uri"][0]).path
+    assert c.get(request_path).status_code == 200
+    c.post("/wallet/change", data={"csrf": csrf_from(eu_page)})
+    assert c.get(request_path).status_code == 404                                  # closed
+    assert c.post(request_path + "/response", json={"nonce": "x", "decision": "share", "claims": {}}).status_code == 404
+    assert "Which ID app do you have?" in c.get("/wallet").text
+
+
+def test_swiss_test_identity_says_switzerland(two_wallet_client):
+    from .conftest import wallet_answer
+    c = two_wallet_client
+    page = choose(c, signed_in(c), "mock-ch")
+    heidi = {"issuing_country": "CH", "issuing_authority": "fedpol"}
+    assert wallet_answer(c, page, heidi).status_code == 200
+    c.get("/wallet/done")
     url = c.get("/issued").text.split("<code data-proof-url>")[1].split("</code>")[0]
-    assert "issued by <strong>Switzerland</strong>" in html.unescape(c.get(url.removeprefix("https://verify.test")).text)
-    assert c.post("/verify", data={"handle": f"@alice@{HOST}", "level": "person", "wallet": "eudi"}).status_code == 400
+    assert "issued by <strong>Switzerland (fedpol)</strong>" in html.unescape(c.get(url.removeprefix("https://verify.test")).text)
+
+
+def test_eu_request_refuses_a_swiss_identity(two_wallet_client):
+    from .conftest import wallet_answer
+    c = two_wallet_client
+    page = choose(c, signed_in(c), "mock")
+    assert wallet_answer(c, page, {"issuing_country": "CH", "issuing_authority": "fedpol"}).status_code == 400
+
+
+# ---- real EU + Swiss providers together ----
+
+class FakeBoth:
+    def __init__(self, swiyu_up=True):
+        self.swiyu = FakeSwiyu(claims={"issuing_country": "CH", "issuing_authority": "fedpol"})
+        self.swiyu_up = swiyu_up
+        self.eudi_calls = 0
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "swiyu.internal":
+            if not self.swiyu_up:
+                raise httpx.ConnectError("down")
+            return self.swiyu.handler(request)
+        if request.url.host == "eudi.internal":
+            self.eudi_calls += 1
+            return httpx.Response(200, json={"transaction_id": "tx", "client_id": "x509_san_dns:v",
+                                             "request_uri": "https://v/r"})
+        return MASTODON.handler(request)
+
+
+MASTODON = None
+
+
+@pytest.fixture
+def real_both(settings, mastodon):
+    global MASTODON
+    MASTODON = mastodon
+    def make(**kw):
+        fake = FakeBoth(**kw)
+        app = create_app(replace(settings, identity_providers=("eudi", "swiyu"), eudi_endpoint="https://eudi.internal",
+                                 swiyu_endpoint="https://swiyu.internal", swiyu_issuer_dids=(ISSUER,)),
+                         http=httpx.AsyncClient(transport=httpx.MockTransport(fake.handler)))
+        return fake, TestClient(app, base_url="https://verify.test", follow_redirects=False)
+    return make
+
+
+def test_choosing_swiss_contacts_only_the_swiss_verifier(real_both):
+    import jwt
+    fake, c = real_both()
+    with c:
+        page = choose(c, signed_in(c), "swiyu")
+        assert "swiyu-verify://" in page and fake.eudi_calls == 0                    # EU endpoint never asked
+        assert c.get("/wallet/status").json()["state"] == "done"
+        url = c.get("/issued").text.split("<code data-proof-url>")[1].split("</code>")[0]
+        claims = jwt.decode(c.get(url.removeprefix("https://verify.test") + ".jwt").text,
+                            options={"verify_signature": False})
+        assert claims["identity_check_method"] == "swiyu-eid" and claims["issuing_country"] == "CH"
+
+
+def test_unreachable_system_says_so(real_both):
+    _, c = real_both(swiyu_up=False)
+    with c:
+        page = signed_in(c)
+        r = c.post("/wallet/choose", data={"csrf": csrf_from(page), "wallet": "swiyu"})
+        assert r.status_code == 502 and "can&#39;t be reached" in r.text

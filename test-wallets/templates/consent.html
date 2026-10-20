@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Share with {{ req.client_name }}?{% endblock %}
+{% block body %}
+<div class="bar"><h1>{{ a.name }} (TEST)</h1><p>Request to share your details</p></div>
+<main>
+  <div class="card">
+    <strong>{{ req.client_name }}</strong><br><span class="muted">{{ req.client_url }}</span>
+    <p>wants: <strong>{{ req.purpose }}</strong></p>
+    <p class="muted">It is asking for: {% for c in req.requested_claims %}{{ labels[c] }}{% if not loop.last %}, {% endif %}{% endfor %}. Nothing else is shared (not your birth date).</p>
+  </div>
+  <form method="post">
+    <input type="hidden" name="request_uri" value="{{ request_uri }}">
+    <p><strong>Share as</strong></p>
+    {% for pid, p in a.personas.items() %}
+    <label class="persona"><input type="radio" name="persona" value="{{ pid }}"{% if loop.first %} checked{% endif %}>
+      <strong>{{ p.given_name }} {{ p.family_name }}</strong>
+      <table>
+        {% for c in req.requested_claims %}<tr><td>{{ labels[c] }}</td><td>{{ shown(c, claim_value(p, c)) }}</td></tr>{% endfor %}
+      </table>
+    </label>
+    {% endfor %}
+    <button type="submit" name="decision" value="share">Share</button>
+    <button type="submit" name="decision" value="decline" class="decline">Decline</button>
+  </form>
+</main>
+{% endblock %}

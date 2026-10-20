@@ -22,12 +22,16 @@
   .choice { display:flex; gap:.5rem; align-items:flex-start; font-weight:normal; margin:.5rem 0; }
   button { margin-top:1rem; padding:.6rem 1.1rem; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
   button.danger { background:#dc2626; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--line); }
   code, .code { font-family: ui-monospace, monospace; word-break: break-all; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:.15rem .35rem; }
   .code { display:block; padding:.75rem; font-size:1.05rem; }
   pre.code { font-size:.75rem; white-space:pre; overflow-x:auto; }
   details summary { cursor:pointer; margin:.75rem 0; } h3 { font-size:1rem; margin:1.25rem 0 .4rem; }
   .banner { background:var(--warnbg); color:var(--warn); border-radius:8px; padding:.6rem .9rem; font-weight:600; margin-bottom:1rem; }
-  .qr svg { width: 260px; height: 260px; background:#fff; border-radius:8px; }
+  .qr svg { width: 220px; height: 220px; background:#fff; border-radius:8px; }
+  .wallet-options { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; margin-top:.5rem; }
+  .wallet-option { border:1px solid var(--line); border-radius:10px; padding:1rem; }
+  .wallet-option h2 { margin:0 0 .25rem; font-size:1.05rem; }
   a { color: var(--accent); }
   header.site { max-width:58rem; margin:1.5rem auto 0; padding:0 1rem; }
   header.site a { color:var(--fg); text-decoration:none; font-size:1.6rem; font-weight:800; letter-spacing:-.01em; }

@@ -92,9 +92,29 @@ def test_callback_rejects_wrong_state(client):
     assert "cancelled" in r.text
 
 
-def test_mock_form_requires_csrf(client):
+def test_wallet_response_needs_the_nonce_and_only_requested_claims(client):
+    from urllib.parse import urlparse
     sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
-    assert client.post("/wallet/mock", data={"csrf": "wrong"}).status_code == 400
+    page = client.get("/wallet").text
+    import html as h, re
+    from urllib.parse import parse_qs
+    href = h.unescape(re.search(r'href="([^"]*/present\?request_uri=[^"]*)"', page).group(1))
+    path = urlparse(parse_qs(urlparse(href).query)["request_uri"][0]).path
+    req = client.get(path).json()
+    assert req["requested_claims"] == ["issuing_country", "issuing_authority"]       # person level: no name
+    respond = lambda body: client.post(path + "/response", json=body)
+    assert respond({"nonce": "wrong", "decision": "share", "claims": {"issuing_country": "IT"}}).status_code == 400
+    assert respond({"nonce": req["nonce"], "decision": "share",
+                    "claims": {"issuing_country": "IT", "given_name": "Mario"}}).status_code == 400   # not requested
+    assert respond({"nonce": req["nonce"], "decision": "share", "claims": {"issuing_country": "IT"}}).status_code == 200
+    assert respond({"nonce": req["nonce"], "decision": "share", "claims": {"issuing_country": "IT"}}).status_code == 400   # once
+
+
+def test_declining_in_the_wallet_issues_nothing(client):
+    from .conftest import wallet_answer
+    sign_in(client, "/verify", {"handle": f"@alice@{HOST}", "level": "person", "binding": "mastodon-sign-in"})
+    assert wallet_answer(client, client.get("/wallet").text, decision="decline").status_code == 200
+    assert "declined" in client.get("/wallet/done").text
 
 
 # ---- revocation ----
@@ -223,10 +243,10 @@ def test_pending_proof_can_be_revoked_with_code(client):
 
 
 def test_issued_page_shows_the_real_label_and_link(client):
-    r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": "person", "binding": "link-back"})
-    page = client.get("/wallet").text
-    r = client.post("/wallet/mock", data={"csrf": csrf_from(page)})
-    client.get(r.headers["location"])
+    from .conftest import wallet_answer
+    client.post("/verify", data={"handle": f"@alice@{HOST}", "level": "person", "binding": "link-back"})
+    wallet_answer(client, client.get("/wallet").text)
+    client.get("/wallet/done")
     html = client.get("/issued").text
     url = html.split("<code data-proof-url>")[1].split("</code>")[0]
     form = html.split('<div class="mshot"')[1].split('<div class="mshot__actions">')[0]
@@ -264,10 +284,9 @@ def test_both_levels_show_issuing_country_and_authority(client):
         r = client.post("/verify", data={"handle": f"@alice@{HOST}", "level": level, "binding": "mastodon-sign-in"})
         auth = parse_qs(urlparse(r.headers["location"]).query)
         client.get("/auth/mastodon/callback", params={"code": "good-code", "state": auth["state"][0]})
-        page = client.get("/wallet").text
-        r = client.post("/wallet/mock", data={"csrf": csrf_from(page), "given_name": "Mario", "family_name": "Rossi",
-                                              "issuing_country": "IT", "issuing_authority": "Ministero dell'Interno"})
-        client.get(r.headers["location"])
+        from .conftest import wallet_answer
+        wallet_answer(client, client.get("/wallet").text)
+        client.get("/wallet/done")
         url = client.get("/issued").text.split("<code data-proof-url>")[1].split("</code>")[0]
         proof = client.get(path_of(url)).text
         assert "issued by <strong>Italy (Ministero dell&#39;Interno)</strong>" in proof

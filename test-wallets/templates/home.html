@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="bar"><h1>Test wallet apps</h1><p>For trying Fediverse Verify locally</p></div>
+<main>
+  <p>These pretend to be ID apps on a phone. Each holds fictional identities, as if a government had issued them. Use them from the verifier's "open it on this device" link.</p>
+  {% for id, x in apps.items() %}
+  <a class="card tile" style="border-left-color: {{ x.color }}" href="/{{ id }}"><strong>{{ x.name }} (TEST)</strong><br><span class="muted">{{ x.tagline }} · {{ x.personas | length }} test identities</span></a>
+  {% endfor %}
+</main>
+{% endblock %}

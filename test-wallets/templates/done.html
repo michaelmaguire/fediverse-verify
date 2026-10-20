@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ "Shared" if ok else "Not shared" }}{% endblock %}
+{% block body %}
+<div class="bar"><h1>{{ a.name }} (TEST)</h1><p>{{ req.client_name }}</p></div>
+<main>
+  {% if ok and decision == "share" %}
+    <h2>Shared</h2><p>Your details were sent to {{ req.client_name }}. Go back to the verifier's tab: it continues by itself.</p>
+  {% elif ok %}
+    <h2>Declined</h2><p>Nothing was shared. The verifier will show that you declined.</p>
+  {% else %}
+    <h2>Not accepted</h2><p>The verifier refused the answer: {{ detail }}</p>
+  {% endif %}
+  <a class="btn" href="{{ req.return_url }}">Back to {{ req.client_name }}</a>
+</main>
+{% endblock %}

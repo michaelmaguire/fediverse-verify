@@ -4,3 +4,4 @@ tests
 deploy
 **/__pycache__
 *.egg-info
+test-wallets

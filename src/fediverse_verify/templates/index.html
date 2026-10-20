@@ -15,12 +15,6 @@
   <form method="post" action="/verify">
     <label for="handle">Your account</label>
     <input id="handle" name="handle" type="text" placeholder="@you@example.social" required autocomplete="username">
-    {% if wallets | length > 1 %}
-    <label>Your digital ID</label>
-    {% for w in wallets %}<label class="choice"><input type="radio" name="wallet" value="{{ w.name }}"{% if loop.first %} checked{% endif %}>
-      <span><strong>{{ w.label }}</strong> ({{ w.countries }})</span></label>
-    {% endfor %}
-    {% else %}<input type="hidden" name="wallet" value="{{ wallets[0].name }}">{% endif %}
     <label>What to publish</label>
     <label class="choice"><input type="radio" name="level" value="legal_name" checked>
       <span><strong>Verified name</strong> (recommended): your legal name is shown on your proof page. It's public: others may copy it, and removing your proof later can't reach those copies.</span></label>

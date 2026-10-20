@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import httpx
 
 from ..config import Settings
+from ..countries import EU_MEMBER_STATES
 from . import IdentityProvider
 from .eudi import EudiProvider
 from .mock import MockProvider
@@ -18,15 +19,19 @@ class WalletType:
     name: str
     label: str            # shown on the start page
     wallet_app: str       # shown on the wallet page ("Scan with your …")
-    countries: str        # who can use it
+    countries: str        # who can use it, shown on the start page ("" to omit)
+    issuing_countries: tuple[str, ...] = ()   # the only countries this system's IDs can come from
     test_only: bool = False
 
 
 WALLET_TYPES = {
-    "eudi": WalletType("eudi", "EU Digital Identity Wallet", "EU Digital Identity wallet", "EU member states"),
-    "swiyu": WalletType("swiyu", "Swiss e-ID (swiyu)", "swiyu wallet", "Switzerland"),
-    "mock": WalletType("mock", "Test wallet (EU-style)", "test wallet", "test mode", test_only=True),
-    "mock-ch": WalletType("mock-ch", "Test wallet (Swiss-style)", "test wallet", "test mode", test_only=True),
+    "eudi": WalletType("eudi", "EU Digital Identity Wallet", "EU Digital Identity wallet",
+                       "any EU country", EU_MEMBER_STATES),
+    "swiyu": WalletType("swiyu", "Swiss e-ID (swiyu)", "swiyu wallet", "Switzerland", ("CH",)),
+    "mock": WalletType("mock", "EU Digital Identity Wallet (test)", "test EU wallet app",
+                       "test apps: IT-Wallet and German wallet", EU_MEMBER_STATES, test_only=True),
+    "mock-ch": WalletType("mock-ch", "Swiss e-ID (test)", "test swiyu app", "test app: swiyu",
+                          ("CH",), test_only=True),
 }
 
 
@@ -44,7 +49,8 @@ def build_providers(settings: Settings, http: httpx.AsyncClient) -> dict[str, Id
         elif name == "swiyu":
             providers[name] = SwiyuProvider(http, settings.swiyu_endpoint, settings.swiyu_issuer_dids)
         elif name == "mock":
-            providers[name] = MockProvider("mock", "IT")
+            providers[name] = MockProvider("mock", "eu", settings.public_url, settings.test_wallet_url,
+                                           EU_MEMBER_STATES)
         elif name == "mock-ch":
-            providers[name] = MockProvider("mock-ch", "CH")
+            providers[name] = MockProvider("mock-ch", "ch", settings.public_url, settings.test_wallet_url, ("CH",))
     return providers

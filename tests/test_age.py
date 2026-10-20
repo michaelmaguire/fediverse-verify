@@ -42,11 +42,11 @@ def test_age_not_mentioned_unless_asked(client):
 def test_unconfirmed_age_issues_proof_without_age(client):
     r = client.post("/verify", data={"handle": "@alice@social.example", "level": "person", "binding": "link-back",
                                      "show_age": "yes"})
-    from .conftest import csrf_from
+    from .conftest import MARIO, wallet_answer
     page = client.get("/wallet").text
     assert "18 or over" in page
-    r = client.post("/wallet/mock", data={"csrf": csrf_from(page)})          # box left unticked
-    client.get(r.headers["location"])
+    wallet_answer(client, page, {**MARIO, "age_over_18": False})              # an under-18 test identity
+    client.get("/wallet/done")
     issued = html.unescape(client.get("/issued").text)
     assert "didn't confirm that you're 18 or over" in issued
     url = issued.split("<code data-proof-url>")[1].split("</code>")[0]

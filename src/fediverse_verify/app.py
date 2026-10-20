@@ -47,10 +47,10 @@ class Flow:
     level: str = "legal_name"
     binding: str = "mastodon-sign-in"
     include_age: bool = False                     # the person asked to also show "18+"
-    provider: str = ""                            # which wallet type, e.g. "eudi" or "swiyu"
+    provider: str = ""                            # the chosen wallet system, e.g. "eudi" or "swiyu"
     auth: Authorization | None = None
     account: BoundAccount | None = None
-    wallet: WalletRequest | None = None
+    wallet: WalletRequest | None = None           # the open request with the chosen wallet system
     csrf: str = field(default_factory=lambda: secrets.token_urlsafe(16))
     created: float = field(default_factory=time.time)
 
@@ -141,47 +141,54 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         return render(request, "index.html")
 
     async def begin_sign_in(request: Request, handle: str, purpose: str, level: str = "legal_name",
-                            include_age: bool = False, provider_name: str = ""):
+                            include_age: bool = False):
         try:
             auth = await binding.authorize(handle)
         except (BindingError, UnsafeHostError) as e:
             return message(request, "Can't sign in", str(e))
         except httpx.HTTPError:
             return message(request, "Can't reach your server", "Check the handle and try again.", 502)
-        start_flow(request, Flow(purpose=purpose, level=level, auth=auth, include_age=include_age,
-                                 provider=provider_name))
+        start_flow(request, Flow(purpose=purpose, level=level, auth=auth, include_age=include_age))
         return RedirectResponse(auth.url, status_code=303)
 
     @app.post("/verify")
     async def verify_start(request: Request, handle: str = Form(...), level: str = Form("legal_name"),
                            binding_method: str = Form("link-back", alias="binding"),
-                           show_age: str = Form(""), wallet: str = Form("")):
+                           show_age: str = Form("")):
         include_age = show_age == "yes"
-        wallet = wallet or next(iter(providers))
-        if wallet not in providers:
-            raise HTTPException(status_code=400, detail="Unknown digital ID type.")
         if level not in LEVEL_PATH or binding_method not in BINDINGS:
             raise HTTPException(status_code=400, detail="Unknown option.")
         if binding_method == "mastodon-sign-in":
-            return await begin_sign_in(request, handle, "verify", level, include_age, wallet)
+            return await begin_sign_in(request, handle, "verify", level, include_age)
         try:
             account = await linkback.resolve(handle)
         except (BindingError, UnsafeHostError) as e:
             return message(request, "Can't find that account", str(e))
         except httpx.HTTPError:
             return message(request, "Can't reach your server", "Check the handle and try again.", 502)
-        flow = Flow(purpose="verify", level=level, binding="link-back", account=account, include_age=include_age,
-                    provider=wallet)
+        flow = Flow(purpose="verify", level=level, binding="link-back", account=account, include_age=include_age)
         start_flow(request, flow)
         return await begin_wallet(request, flow)
 
-    async def begin_wallet(request: Request, flow: Flow):
+    async def open_wallet_request(request: Request, flow: Flow, name: str):
+        """Create a request with the one wallet system the person chose."""
         try:
-            flow.wallet = await providers[flow.provider].begin(flow.level, flow.include_age)
-        except (IdentityError, httpx.HTTPError) as e:
-            end_flow(request)
-            return message(request, "Wallet unavailable", str(e) or "Please try again later.", 502)
+            flow.wallet = await providers[name].begin(flow.level, flow.include_age)
+        except (IdentityError, httpx.HTTPError):
+            return message(request, "Wallet unavailable",
+                           f"{WALLET_TYPES[name].label} can't be reached right now. Please try again later.", 502)
+        flow.provider = name
         return RedirectResponse("/wallet", status_code=303)
+
+    def close_wallet_request(flow: Flow) -> None:
+        if flow.wallet is not None and hasattr(providers.get(flow.provider), "close"):
+            providers[flow.provider].close(flow.wallet)
+        flow.wallet, flow.provider = None, ""
+
+    async def begin_wallet(request: Request, flow: Flow):
+        if len(providers) == 1:
+            return await open_wallet_request(request, flow, next(iter(providers)))
+        return RedirectResponse("/wallet", status_code=303)        # the person picks their ID app there
 
     @app.get("/auth/mastodon/callback")
     async def mastodon_callback(request: Request, code: str = "", state: str = "", error: str = ""):
@@ -202,41 +209,55 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     @app.get("/wallet", response_class=HTMLResponse)
     async def wallet_page(request: Request):
         flow = current_flow(request)
-        if flow.account is None or flow.wallet is None:
+        if flow.account is None:
             raise HTTPException(status_code=400, detail="Please start again.")
+        if flow.wallet is None:                                     # choose an ID app first
+            return render(request, "wallet.html", flow=flow, choosing=True)
         qr_svg = ""
         if flow.wallet.kind == "qr":
             buf = io.BytesIO()
             segno.make(flow.wallet.wallet_url, error="m").save(buf, kind="svg", scale=5, xmldecl=False)
             qr_svg = buf.getvalue().decode()
-        return render(request, "wallet.html", flow=flow, qr_svg=qr_svg,
-                      mock_country=getattr(providers[flow.provider], "default_country", "IT"))
+        return render(request, "wallet.html", flow=flow, choosing=False, chosen=WALLET_TYPES[flow.provider],
+                      qr_svg=qr_svg, can_change=len(providers) > 1)
 
-    @app.post("/wallet/mock")
-    async def wallet_mock_submit(request: Request, csrf: str = Form(...), given_name: str = Form(""),
-                                 family_name: str = Form(""), issuing_country: str = Form("IT"),
-                                 issuing_authority: str = Form(""), over_18: str = Form("")):
+    @app.post("/wallet/choose")
+    async def wallet_choose(request: Request, csrf: str = Form(...), wallet: str = Form(...)):
         flow = current_flow(request)
-        provider = providers.get(flow.provider)
-        if not isinstance(provider, MockProvider):
-            raise HTTPException(status_code=404)
         check_csrf(flow, csrf)
+        if wallet not in providers:
+            raise HTTPException(status_code=400, detail="Unknown ID app.")
+        close_wallet_request(flow)
+        return await open_wallet_request(request, flow, wallet)
+
+    @app.post("/wallet/change")
+    async def wallet_change(request: Request, csrf: str = Form(...)):
+        flow = current_flow(request)
+        check_csrf(flow, csrf)
+        close_wallet_request(flow)                                  # later answers to it are refused
+        return RedirectResponse("/wallet", status_code=303)
+
+    async def answered_wallet(flow: Flow):
+        """(result, error) from the chosen wallet's request, or (None, None) while waiting."""
         if flow.wallet is None:
-            raise HTTPException(status_code=400, detail="Please start again.")
-        provider.submit(flow.wallet.handle, given_name.strip(), family_name.strip(),
-                        issuing_country.strip()[:2], issuing_authority.strip()[:100],
-                        age_over_18=flow.include_age and over_18 == "yes")
-        return RedirectResponse("/wallet/done", status_code=303)
+            return None, None
+        try:
+            return await providers[flow.provider].result(flow.wallet), None
+        except IdentityError as e:
+            return None, str(e)
 
     @app.get("/wallet/status")
     async def wallet_status(request: Request):
         flow = current_flow(request)
         if flow.wallet is None:
-            return JSONResponse({"state": "error"})
+            return JSONResponse({"state": "pending"})
         try:
-            result = await providers[flow.provider].result(flow.wallet)
-        except (IdentityError, httpx.HTTPError):
-            return JSONResponse({"state": "error"})
+            result, error = await answered_wallet(flow)
+        except httpx.HTTPError:
+            return JSONResponse({"state": "pending"})
+        if error:
+            end_flow(request)
+            return JSONResponse({"state": "error", "message": error})
         if result is None:
             return JSONResponse({"state": "pending"})
         return await _issue(request, flow, result, as_json=True)
@@ -245,12 +266,11 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     async def wallet_done(request: Request):
         flow = current_flow(request)
         if flow.wallet is None:
-            raise HTTPException(status_code=400, detail="Please start again.")
-        try:
-            result = await providers[flow.provider].result(flow.wallet)
-        except IdentityError as e:
+            return RedirectResponse("/wallet", status_code=303)
+        result, error = await answered_wallet(flow)
+        if error:
             end_flow(request)
-            return message(request, "Verification failed", str(e))
+            return message(request, "Verification failed", error)
         if result is None:
             return RedirectResponse("/wallet", status_code=303)
         return await _issue(request, flow, result)
@@ -321,6 +341,41 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
             return JSONResponse({"status": proof.status})
         return RedirectResponse(proof_url(proof) + ("?checked=1" if proof.status == "pending" else ""),
                                 status_code=303)
+
+    # ---- the test-wallet apps' side of a request (only when test wallets are enabled) ----
+    mock_providers = [p for p in providers.values() if isinstance(p, MockProvider)]
+    if mock_providers:
+        def find_request(request_id: str):
+            for p in mock_providers:
+                pending = p.request_object(request_id)
+                if pending is not None:
+                    return p, pending
+            raise HTTPException(status_code=404)
+
+        @app.get("/test-wallet-api/requests/{request_id}")
+        async def test_wallet_request(request_id: str):
+            provider, pending = find_request(request_id)
+            label = "Verified name" if pending.level == "legal_name" else "Verified person"
+            return JSONResponse({
+                "client_name": settings.app_name, "client_url": settings.public_url, "system": provider.system,
+                "purpose": f"{label}{' · 18+' if pending.include_age else ''} proof for a Fediverse account",
+                "requested_claims": pending.claims, "nonce": pending.nonce,
+                "response_uri": f"{settings.public_url}/test-wallet-api/requests/{request_id}/response",
+                "return_url": f"{settings.public_url}/wallet",
+            })
+
+        @app.post("/test-wallet-api/requests/{request_id}/response")
+        async def test_wallet_response(request: Request, request_id: str):
+            provider, _ = find_request(request_id)
+            try:
+                body = await request.json()
+                provider.respond(request_id, str(body.get("nonce", "")), str(body.get("decision", "")),
+                                 dict(body.get("claims") or {}))
+            except LookupError:
+                raise HTTPException(status_code=404)
+            except (ValueError, TypeError) as e:
+                return JSONResponse({"error": str(e)}, status_code=400)
+            return JSONResponse({"status": "received"})
 
     @app.get("/about", response_class=HTMLResponse)
     async def about(request: Request):

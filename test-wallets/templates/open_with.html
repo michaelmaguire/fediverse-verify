@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Open with{% endblock %}
+{% block body %}
+<div class="bar"><h1>Open with…</h1><p>What your phone asks when several wallet apps can open a link</p></div>
+<main>
+  <p class="muted">This request comes from an EU Digital Identity Wallet flow, so any EU wallet app can answer it.</p>
+  {% for id in matching %}{% set x = apps[id] %}
+  <a class="card tile" style="border-left-color: {{ x.color }}" href="/{{ id }}/consent?request_uri={{ request_uri | urlencode }}"><strong>{{ x.name }} (TEST)</strong><br><span class="muted">{{ x.tagline }}</span></a>
+  {% endfor %}
+</main>
+{% endblock %}

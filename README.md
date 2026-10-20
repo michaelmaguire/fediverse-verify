@@ -49,6 +49,8 @@ VERIFIER_SESSION_SECRET=dev .venv/bin/uvicorn --factory fediverse_verify.app:mai
 
 To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setup.sh`).
 
+**Test wallets:** `test-wallets/` has three fake ID apps (IT-Wallet, a German EU wallet, swiyu) with fictional identities, for the `mock` and `mock-ch` wallet types. They're not part of the verifier's image. See [`test-wallets/README.md`](test-wallets/README.md).
+
 ## Configuration
 
 | Variable | Default | Meaning |
@@ -56,10 +58,11 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 | `VERIFIER_PUBLIC_URL` | `http://localhost:8000` | Public base URL (used in proof URLs and as `iss`) |
 | `VERIFIER_SESSION_SECRET` | required | Signs the session cookie |
 | `VERIFIER_DATA_DIR` | `./data` (`/data` in Docker) | SQLite DB and signing key (`signing-key.pem`, created on first start) |
-| `VERIFIER_IDENTITY_PROVIDERS` | `mock` | Comma-separated wallet types offered: `eudi` (EU Digital Identity Wallets), `swiyu` (Swiss e-ID); or for development only `mock`, `mock-ch`. With several, users choose. Test and real types can't be mixed |
+| `VERIFIER_IDENTITY_PROVIDERS` | `mock` | Comma-separated wallet types offered: `eudi` (EU Digital Identity Wallets), `swiyu` (Swiss e-ID); or for development only `mock` (EU-style test apps), `mock-ch` (Swiss-style). With several, users pick their ID app at the wallet step. Test and real types can't be mixed |
 | `VERIFIER_EUDI_ENDPOINT` | — | Base URL of the EUDI reference verifier endpoint |
 | `VERIFIER_SWIYU_ENDPOINT` | — | Base URL of the swiyu generic verifier's (internal) management API |
 | `VERIFIER_SWIYU_ISSUER_DIDS` | — | Comma-separated issuer DIDs whose Swiss e-IDs are accepted |
+| `VERIFIER_TEST_WALLET_URL` | `http://localhost:8001` | Where the test wallet apps run, for `mock` / `mock-ch` |
 | `VERIFIER_ALLOW_PRIVATE_HOSTS` | `false` | Allow account servers on private IPs (local testing only) |
 | `VERIFIER_SOURCE_URL` | `https://github.com/michaelmaguire/fediverse-verify` | Linked from every page's footer |
 | `VERIFIER_GIT_COMMIT` | from `git`, else unknown | Commit shown in the footer; set by the `GIT_COMMIT` build arg (`<sha>` or `<sha>-dirty`). Only a clean commit is linked. |

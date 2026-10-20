@@ -27,6 +27,7 @@ class Settings:
     eudi_wallet_scheme: str = "openid4vp://"
     swiyu_endpoint: str = ""             # base URL of the swiyu verifier's management API, for "swiyu"
     swiyu_issuer_dids: tuple[str, ...] = ()   # issuer DIDs whose Swiss e-IDs are accepted
+    test_wallet_url: str = "http://localhost:8001"   # the test-wallet apps, for "mock" / "mock-ch"
     allow_private_hosts: bool = False    # let instance hosts resolve to private IPs (local testing only)
     app_name: str = "Fediverse Verify"     # site name; also shown on Mastodon's sign-in consent screen
     source_url: str = "https://github.com/michaelmaguire/fediverse-verify"
@@ -51,6 +52,7 @@ class Settings:
             eudi_wallet_scheme=os.environ.get("VERIFIER_EUDI_WALLET_SCHEME", "openid4vp://"),
             swiyu_endpoint=os.environ.get("VERIFIER_SWIYU_ENDPOINT", "").rstrip("/"),
             swiyu_issuer_dids=_list(os.environ.get("VERIFIER_SWIYU_ISSUER_DIDS", "")),
+            test_wallet_url=os.environ.get("VERIFIER_TEST_WALLET_URL", "http://localhost:8001").rstrip("/"),
             allow_private_hosts=_bool("VERIFIER_ALLOW_PRIVATE_HOSTS"),
             app_name=os.environ.get("VERIFIER_APP_NAME", "Fediverse Verify"),
             source_url=os.environ.get("VERIFIER_SOURCE_URL", "https://github.com/michaelmaguire/fediverse-verify"),

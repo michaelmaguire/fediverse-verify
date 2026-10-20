@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }}{% endblock %}
+{% block body %}
+<div class="bar"><h1>{{ a.name }} (TEST)</h1><p>{{ a.tagline }}</p></div>
+<main>
+  <p><strong>Your test identities</strong></p>
+  {% for pid, p in a.personas.items() %}
+  <div class="card">
+    <strong>{{ p.given_name }} {{ p.family_name }}</strong> <span class="muted">· {{ "adult" if is_adult(p.birthdate) else "under 18" }}</span>
+    <table>
+      <tr><td>Born</td><td>{{ p.birthdate }}</td></tr>
+      <tr><td>Issuing country</td><td>{{ shown("issuing_country", p.issuing_country) }}</td></tr>
+      <tr><td>Issuing authority</td><td>{{ p.issuing_authority }}</td></tr>
+    </table>
+  </div>
+  {% endfor %}
+  <p class="muted"><a href="/">All test apps</a></p>
+</main>
+{% endblock %}

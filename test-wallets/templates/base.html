@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Test wallets{% endblock %} (TEST, not a real wallet)</title>
+<style>
+  :root { --app: {{ a.color if a else "#475569" }}; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:#e2e8f0; color:#0f172a; }
+  .phone { max-width: 26rem; margin: 1.5rem auto; background:#fff; border-radius: 28px; overflow:hidden;
+           box-shadow: 0 10px 30px rgba(0,0,0,.18); border: 8px solid #0f172a; }
+  .test { background: repeating-linear-gradient(45deg, #fde047, #fde047 10px, #facc15 10px, #facc15 20px);
+          color:#111; font-weight:800; text-align:center; padding:.4rem .6rem; font-size:.85rem; letter-spacing:.02em; }
+  .bar { background: var(--app); color:#fff; padding: .9rem 1rem; }
+  .bar h1 { margin:0; font-size:1.15rem; } .bar p { margin:.1rem 0 0; opacity:.9; font-size:.85rem; }
+  main { padding: 1rem; }
+  .card { border:1px solid #e2e8f0; border-radius:14px; padding:.9rem; margin-bottom:.8rem; }
+  .muted { color:#64748b; font-size:.88rem; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; } td { padding:.3rem 0; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  td:first-child { color:#64748b; width:45%; }
+  button, .btn { display:inline-block; width:100%; margin-top:.6rem; padding:.7rem; border:0; border-radius:12px;
+                 background:var(--app); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-align:center; text-decoration:none; }
+  button.decline { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
+  label.persona { display:block; border:2px solid #e2e8f0; border-radius:14px; padding:.8rem; margin-bottom:.6rem; cursor:pointer; }
+  label.persona:has(input:checked) { border-color: var(--app); }
+  .tile { display:block; color:inherit; text-decoration:none; border-left:6px solid; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="test">TEST APP · NOT A REAL WALLET · fictional identities</div>
+  {% block body %}{% endblock %}
+</div>
+</body>
+</html>

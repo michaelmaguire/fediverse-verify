@@ -102,9 +102,27 @@ def link_field(url: str) -> dict:
     return {"name": "Verified name", "value": f'<a href="{url}" rel="me nofollow noopener" target="_blank">{url}</a>'}
 
 
+MARIO = {"given_name": "Mario", "family_name": "Rossi", "issuing_country": "IT",
+         "issuing_authority": "Ministero dell'Interno", "age_over_18": True}
+
+
+def wallet_answer(client: TestClient, page: str, persona: dict | None = None,
+                  decision: str = "share") -> httpx.Response:
+    """Act like a test wallet app: open the request link shown on the wallet page and answer it."""
+    import html as html_mod
+    import re
+    href = html_mod.unescape(re.search(r'href="([^"]*/present\?request_uri=[^"]*)"', page).group(1))
+    request_uri = parse_qs(urlparse(href).query)["request_uri"][0]
+    req = client.get(urlparse(request_uri).path).json()
+    claims = {k: v for k, v in (persona or MARIO).items() if k in req["requested_claims"]}
+    return client.post(urlparse(req["response_uri"]).path,
+                       json={"nonce": req["nonce"], "decision": decision, "claims": claims})
+
+
 def verify(client: TestClient, level: str, given: str = "Mario", family: str = "Rossi",
-           binding: str = "mastodon-sign-in", show_age: bool = False, over_18: bool = True) -> tuple[str, str]:
-    """Run the whole verify flow with the mock wallet; returns (proof_url, removal_code)."""
+           binding: str = "mastodon-sign-in", show_age: bool = False, over_18: bool = True,
+           persona: dict | None = None) -> tuple[str, str]:
+    """Run the whole verify flow with a test wallet; returns (proof_url, removal_code)."""
     form = {"handle": f"@alice@{HOST}", "level": level, "binding": binding}
     if show_age:
         form["show_age"] = "yes"
@@ -114,12 +132,10 @@ def verify(client: TestClient, level: str, given: str = "Mario", family: str = "
         r = client.post("/verify", data=form)
     assert r.headers["location"] == "/wallet"
     page = client.get("/wallet").text
-    mock = {"csrf": csrf_from(page), "given_name": given, "family_name": family}
-    if over_18:
-        mock["over_18"] = "yes"
-    r = client.post("/wallet/mock", data=mock)
-    r = client.get(r.headers["location"])
-    assert r.headers["location"] == "/issued"
+    persona = persona or {**MARIO, "given_name": given, "family_name": family, "age_over_18": over_18}
+    assert wallet_answer(client, page, persona).status_code == 200
+    r = client.get("/wallet/done")
+    assert r.headers["location"] == "/issued", r.text[:300]
     html = client.get("/issued").text
     url = html.split("<code data-proof-url>")[1].split("</code>")[0]
     code = html.split('<span class="code">')[1].split("</span>")[0]

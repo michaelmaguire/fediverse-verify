@@ -11,6 +11,12 @@ NAMES = {
 }
 
 
+# EUDI wallets are issued by EU member states. (EEA states may join as eIDAS 2 is
+# incorporated into the EEA agreement; add them here when their wallets exist.)
+EU_MEMBER_STATES = ("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
+                    "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE")
+
+
 def country_name(code: str | None) -> str:
     if not code:
         return "an unknown country"
