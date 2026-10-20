@@ -23,6 +23,7 @@ class Settings:
     app_name: str = "Fediverse Verify"     # site name; also shown on Mastodon's sign-in consent screen
     source_url: str = "https://github.com/michaelmaguire/fediverse-verify"
     operator_contact: str = ""            # shown on /about for removal requests (email or URL)
+    storage_encrypted: bool = False        # set by deployments that keep the data folder on an encrypted disk
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -41,4 +42,5 @@ class Settings:
             app_name=os.environ.get("VERIFIER_APP_NAME", "Fediverse Verify"),
             source_url=os.environ.get("VERIFIER_SOURCE_URL", "https://github.com/michaelmaguire/fediverse-verify"),
             operator_contact=os.environ.get("VERIFIER_OPERATOR_CONTACT", ""),
+            storage_encrypted=_bool("VERIFIER_STORAGE_ENCRYPTED"),
         )

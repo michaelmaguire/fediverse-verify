@@ -107,6 +107,16 @@
 </div>
 
 <div class="card">
+  <h2>Published means public</h2>
+  <p>A proof page is public by design: anyone can read it while it exists, and Fediverse servers fetch it to check your profile link. Others may therefore keep copies, for example servers that cached your profile, archives or people who saved the page. <strong>Removing a proof deletes it from this server, but cannot reach copies made elsewhere.</strong> Please keep this in mind before publishing your legal name.</p>
+  {% if settings.storage_encrypted %}
+  <p class="muted">The data folder is on an encrypted disk whose passphrase is entered by hand after every restart. That mainly protects the keys that identify this verifier; for the published proofs themselves, what matters is that removal really deletes them.</p>
+  {% else %}
+  <p class="muted">The data folder is not on an encrypted disk on this server. Published proofs are public anyway; what matters for them is that removal really deletes them. The signing key is readable only by the verifier.</p>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Removing your data</h2>
   <p>You can <a href="/revoke">remove a proof</a> at any time with the removal code you were given, or by signing in with your account. Removal deletes everything we hold about that proof, including any name; the page then no longer exists. This is your right to erasure under <a href="https://eur-lex.europa.eu/eli/reg/2016/679/oj">GDPR</a> (Article 17).</p>
   <p class="muted">Also remove the link from your profile: your own server keeps showing its green check mark until you do. Other servers drop it when they next refresh your profile.</p>

@@ -58,6 +58,7 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 | `VERIFIER_SOURCE_URL` | `https://github.com/michaelmaguire/fediverse-verify` | Linked from every page's footer |
 | `VERIFIER_GIT_COMMIT` | from `git`, else unknown | Commit shown in the footer; set by the `GIT_COMMIT` build arg (`<sha>` or `<sha>-dirty`). Only a clean commit is linked. |
 | `VERIFIER_OPERATOR_CONTACT` | — | Shown on `/about` for removal requests from people who lost both account and code |
+| `VERIFIER_STORAGE_ENCRYPTED` | `false` | Set when the data folder is on an encrypted disk (the `deploy/` recipe does); `/about` says so |
 
 ## Status
 

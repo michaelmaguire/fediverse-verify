@@ -345,3 +345,17 @@ def test_secure_delete_is_on(settings):
     from fediverse_verify.store import Store
     store = Store(settings.data_dir / "x.sqlite3")
     assert store._db.execute("PRAGMA secure_delete").fetchone()[0] == 1
+
+
+def test_about_states_disk_encryption_truthfully(tmp_path, mastodon):
+    import httpx
+    from dataclasses import replace
+    from fastapi.testclient import TestClient
+    from fediverse_verify.app import create_app
+    from fediverse_verify.config import Settings
+    base = Settings(public_url="https://verify.test", data_dir=tmp_path, session_secret="s")
+    for encrypted, expected in ((False, "not on an encrypted disk"), (True, "on an encrypted disk whose passphrase")):
+        app = create_app(replace(base, storage_encrypted=encrypted),
+                         http=httpx.AsyncClient(transport=httpx.MockTransport(mastodon.handler)))
+        with TestClient(app, base_url="https://verify.test") as c:
+            assert expected in c.get("/about").text
