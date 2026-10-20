@@ -106,6 +106,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         return render(request, "message.html", status, title=title, text=text)
 
     def start_flow(request: Request, flow: Flow) -> None:
+        request.session.pop("finished", None)
         now = time.time()
         for key in [k for k, f in flows.items() if now - f.created > FLOW_TTL]:
             flows.pop(key, None)
@@ -208,6 +209,11 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
 
     @app.get("/wallet", response_class=HTMLResponse)
     async def wallet_page(request: Request):
+        if request.session.get("finished") and flows.get(request.session.get("flow", "")) is None:
+            # e.g. the wallet's "back" link opened a second tab after the first had already finished
+            return message(request, "Already done",
+                           "Your verification is complete: your proof is shown in the tab where you started. "
+                           "You can close this tab.", 200)
         flow = current_flow(request)
         if flow.account is None:
             raise HTTPException(status_code=400, detail="Please start again.")
@@ -296,6 +302,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         code = new_removal_code()
         store.add_proof(proof, code)
         end_flow(request)
+        request.session["finished"] = True
         request.session["issued"] = {"id": proof.id, "code": code,
                                      "age_not_confirmed": flow.include_age and not proof.age_over_18}
         if as_json:

@@ -4,12 +4,14 @@
 <div class="bar"><h1>{{ a.name }} (TEST)</h1><p>{{ req.client_name }}</p></div>
 <main>
   {% if ok and decision == "share" %}
-    <h2>Shared</h2><p>Your details were sent to {{ req.client_name }}. Go back to the verifier's tab: it continues by itself.</p>
+    <h2>Shared</h2><p>Your details were sent to {{ req.client_name }}.</p>
+    <p><strong>Go back to the {{ req.client_name }} tab</strong>: it continues by itself. You can close this tab.</p>
   {% elif ok %}
     <h2>Declined</h2><p>Nothing was shared. The verifier will show that you declined.</p>
   {% else %}
     <h2>Not accepted</h2><p>The verifier refused the answer: {{ detail }}</p>
   {% endif %}
-  <a class="btn" href="{{ req.return_url }}">Back to {{ req.client_name }}</a>
+  <p class="muted">(A real wallet on your phone would now switch back to your browser.)</p>
+  <a class="btn" href="{{ req.return_url }}">Open {{ req.client_name }}</a>
 </main>
 {% endblock %}

@@ -458,3 +458,13 @@ def test_about_explains_keys_and_registration_status(tmp_path, mastodon):
             assert expected in page
             kid = c.get("/.well-known/jwks.json").json()["keys"][0]["kid"]
             assert f"<code>{kid}</code>" in page          # the key ID shown matches the published key
+
+
+def test_wallet_page_after_finishing_says_already_done(client):
+    verify(client, "person")
+    r = client.get("/wallet")                       # e.g. the wallet's "back" link, in a second tab
+    assert r.status_code == 200 and "Already done" in r.text and "expired" not in r.text
+
+
+def test_wallet_page_without_any_flow_still_says_expired(client):
+    assert "expired" in client.get("/wallet").text
