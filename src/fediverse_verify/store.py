@@ -35,14 +35,16 @@ CREATE TABLE IF NOT EXISTS proofs (
     account_ownership_check TEXT NOT NULL DEFAULT 'mastodon-sign-in',
     expires_at              INTEGER,         -- only for pending proofs
     issuing_country         TEXT,
-    issuing_authority       TEXT
+    issuing_authority       TEXT,
+    age_over_18             INTEGER          -- 1 if shown as 18+; otherwise NULL (never "under 18")
 );
 CREATE INDEX IF NOT EXISTS proofs_subject ON proofs (subject_uri);
 """
 
 PROOF_COLUMNS = (
     "id, verification_level, subject_uri, account_profile_url, handle, name, identity_check_method, "
-    "attestation, created_at, status, account_ownership_check, expires_at, issuing_country, issuing_authority"
+    "attestation, created_at, status, account_ownership_check, expires_at, issuing_country, issuing_authority, "
+    "age_over_18"
 )
 
 
@@ -62,6 +64,7 @@ class Proof:
     expires_at: int | None = None
     issuing_country: str | None = None
     issuing_authority: str | None = None
+    age_over_18: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,12 @@ class OAuthClient:
     client_id: str
     client_secret: str
     redirect_uri: str
+
+
+def _proof(row: sqlite3.Row) -> Proof:
+    values = dict(row)
+    values["age_over_18"] = True if values.get("age_over_18") else None
+    return Proof(**values)
 
 
 def hash_removal_code(code: str) -> str:
@@ -101,7 +110,8 @@ class Store:
                           ("account_ownership_check", "TEXT NOT NULL DEFAULT 'mastodon-sign-in'"),
                           ("expires_at", "INTEGER"),
                           ("issuing_country", "TEXT"),
-                          ("issuing_authority", "TEXT")):
+                          ("issuing_authority", "TEXT"),
+                          ("age_over_18", "INTEGER")):
             if name not in columns:
                 self._db.execute(f"ALTER TABLE proofs ADD COLUMN {name} {ddl}")
         # 2026-10-20: value renamed for clarity.
@@ -126,11 +136,11 @@ class Store:
     def add_proof(self, proof: Proof, removal_code: str) -> None:
         self._db.execute(
             f"INSERT INTO proofs ({PROOF_COLUMNS}, removal_code_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (proof.id, proof.verification_level, proof.subject_uri, proof.account_profile_url, proof.handle,
              proof.name, proof.identity_check_method, proof.attestation, proof.created_at, proof.status,
              proof.account_ownership_check, proof.expires_at, proof.issuing_country, proof.issuing_authority,
-             hash_removal_code(removal_code)),
+             1 if proof.age_over_18 else None, hash_removal_code(removal_code)),
         )
 
     def activate(self, proof_id: str, attestation: str, issued_at: int) -> None:
@@ -146,13 +156,13 @@ class Store:
     def get_proof(self, proof_id: str) -> Proof | None:
         self.purge_expired()
         row = self._db.execute(f"SELECT {PROOF_COLUMNS} FROM proofs WHERE id = ?", (proof_id,)).fetchone()
-        return Proof(**row) if row else None
+        return _proof(row) if row else None
 
     def proofs_for_subject(self, subject_uri: str) -> list[Proof]:
         rows = self._db.execute(
             f"SELECT {PROOF_COLUMNS} FROM proofs WHERE subject_uri = ? ORDER BY created_at", (subject_uri,)
         ).fetchall()
-        return [Proof(**r) for r in rows]
+        return [_proof(r) for r in rows]
 
     def delete_proof(self, proof_id: str) -> bool:
         return self._db.execute("DELETE FROM proofs WHERE id = ?", (proof_id,)).rowcount > 0

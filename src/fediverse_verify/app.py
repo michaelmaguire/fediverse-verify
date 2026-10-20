@@ -46,6 +46,7 @@ class Flow:
     purpose: str                                  # "verify" or "revoke"
     level: str = "legal_name"
     binding: str = "mastodon-sign-in"
+    include_age: bool = False                     # the person asked to also show "18+"
     auth: Authorization | None = None
     account: BoundAccount | None = None
     wallet: WalletRequest | None = None
@@ -83,6 +84,12 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     templates.env.filters["date"] = lambda ts: time.strftime("%Y-%m-%d", time.gmtime(ts))
     templates.env.globals.update(issuer_label=issuer_label, country_names=COUNTRY_NAMES)
     templates.env.globals.update(signing_key_id=signer.kid)
+
+    def proof_label(proof: Proof, sep: str = " · ") -> str:
+        """'Verified name', 'Verified person', with '· 18+' when shown."""
+        base = "Verified name" if proof.verification_level == "legal_name" else "Verified person"
+        return base + (f"{sep}18+" if proof.age_over_18 else "")
+    templates.env.globals.update(proof_label=proof_label)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -136,36 +143,39 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     async def index(request: Request):
         return render(request, "index.html")
 
-    async def begin_sign_in(request: Request, handle: str, purpose: str, level: str = "legal_name"):
+    async def begin_sign_in(request: Request, handle: str, purpose: str, level: str = "legal_name",
+                            include_age: bool = False):
         try:
             auth = await binding.authorize(handle)
         except (BindingError, UnsafeHostError) as e:
             return message(request, "Can't sign in", str(e))
         except httpx.HTTPError:
             return message(request, "Can't reach your server", "Check the handle and try again.", 502)
-        start_flow(request, Flow(purpose=purpose, level=level, auth=auth))
+        start_flow(request, Flow(purpose=purpose, level=level, auth=auth, include_age=include_age))
         return RedirectResponse(auth.url, status_code=303)
 
     @app.post("/verify")
     async def verify_start(request: Request, handle: str = Form(...), level: str = Form("legal_name"),
-                           binding_method: str = Form("link-back", alias="binding")):
+                           binding_method: str = Form("link-back", alias="binding"),
+                           show_age: str = Form("")):
+        include_age = show_age == "yes"
         if level not in LEVEL_PATH or binding_method not in BINDINGS:
             raise HTTPException(status_code=400, detail="Unknown option.")
         if binding_method == "mastodon-sign-in":
-            return await begin_sign_in(request, handle, "verify", level)
+            return await begin_sign_in(request, handle, "verify", level, include_age)
         try:
             account = await linkback.resolve(handle)
         except (BindingError, UnsafeHostError) as e:
             return message(request, "Can't find that account", str(e))
         except httpx.HTTPError:
             return message(request, "Can't reach your server", "Check the handle and try again.", 502)
-        flow = Flow(purpose="verify", level=level, binding="link-back", account=account)
+        flow = Flow(purpose="verify", level=level, binding="link-back", account=account, include_age=include_age)
         start_flow(request, flow)
         return await begin_wallet(request, flow)
 
     async def begin_wallet(request: Request, flow: Flow):
         try:
-            flow.wallet = await provider.begin(flow.level)
+            flow.wallet = await provider.begin(flow.level, flow.include_age)
         except (IdentityError, httpx.HTTPError) as e:
             end_flow(request)
             return message(request, "Wallet unavailable", str(e) or "Please try again later.", 502)
@@ -202,7 +212,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     @app.post("/wallet/mock")
     async def wallet_mock_submit(request: Request, csrf: str = Form(...), given_name: str = Form(""),
                                  family_name: str = Form(""), issuing_country: str = Form("IT"),
-                                 issuing_authority: str = Form("")):
+                                 issuing_authority: str = Form(""), over_18: str = Form("")):
         if not isinstance(provider, MockProvider):
             raise HTTPException(status_code=404)
         flow = current_flow(request)
@@ -210,7 +220,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         if flow.wallet is None:
             raise HTTPException(status_code=400, detail="Please start again.")
         provider.submit(flow.wallet.handle, given_name.strip(), family_name.strip(),
-                        issuing_country.strip()[:2], issuing_authority.strip()[:100])
+                        issuing_country.strip()[:2], issuing_authority.strip()[:100],
+                        age_over_18=flow.include_age and over_18 == "yes")
         return RedirectResponse("/wallet/done", status_code=303)
 
     @app.get("/wallet/status")
@@ -251,7 +262,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                       account_profile_url=account.profile_url, handle=account.handle, name=name,
                       identity_check_method=result.method, attestation="", created_at=int(time.time()),
                       account_ownership_check=flow.binding,
-                      issuing_country=result.issuing_country, issuing_authority=result.issuing_authority)
+                      issuing_country=result.issuing_country, issuing_authority=result.issuing_authority,
+                      age_over_18=True if (flow.include_age and result.age_over_18) else None)
         if flow.binding == "link-back":
             # Not live until the account links to it; see /check.
             proof = replace(proof, status="pending", expires_at=proof.created_at + PENDING_TTL)
@@ -260,7 +272,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         code = new_removal_code()
         store.add_proof(proof, code)
         end_flow(request)
-        request.session["issued"] = {"id": proof.id, "code": code}
+        request.session["issued"] = {"id": proof.id, "code": code,
+                                     "age_not_confirmed": flow.include_age and not proof.age_over_18}
         if as_json:
             return JSONResponse({"state": "done", "next": "/issued"})
         return RedirectResponse("/issued", status_code=303)
@@ -271,13 +284,14 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         proof = store.get_proof(info["id"]) if info else None
         if proof is None:
             return RedirectResponse("/", status_code=303)
-        return render(request, "issued.html", proof=proof, url=proof_url(proof), code=info["code"])
+        return render(request, "issued.html", proof=proof, url=proof_url(proof), code=info["code"],
+                      age_not_confirmed=info.get("age_not_confirmed", False))
 
     def sign(proof: Proof) -> str:
         claims = build_claims(issuer=settings.public_url, proof_id=proof.id, subject_uri=proof.subject_uri,
                               profile_url=proof.account_profile_url, level=proof.verification_level, method=proof.identity_check_method,
                               name=proof.name, binding=proof.account_ownership_check, issuing_country=proof.issuing_country,
-                              issuing_authority=proof.issuing_authority)
+                              issuing_authority=proof.issuing_authority, age_over_18=proof.age_over_18)
         return signer.sign(claims)
 
     # ---- link-back confirmation (public: anyone may trigger a check, it only reads) ----

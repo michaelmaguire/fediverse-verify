@@ -103,16 +103,21 @@ def link_field(url: str) -> dict:
 
 
 def verify(client: TestClient, level: str, given: str = "Mario", family: str = "Rossi",
-           binding: str = "mastodon-sign-in") -> tuple[str, str]:
+           binding: str = "mastodon-sign-in", show_age: bool = False, over_18: bool = True) -> tuple[str, str]:
     """Run the whole verify flow with the mock wallet; returns (proof_url, removal_code)."""
     form = {"handle": f"@alice@{HOST}", "level": level, "binding": binding}
+    if show_age:
+        form["show_age"] = "yes"
     if binding == "mastodon-sign-in":
         r = sign_in(client, "/verify", form)
     else:
         r = client.post("/verify", data=form)
     assert r.headers["location"] == "/wallet"
     page = client.get("/wallet").text
-    r = client.post("/wallet/mock", data={"csrf": csrf_from(page), "given_name": given, "family_name": family})
+    mock = {"csrf": csrf_from(page), "given_name": given, "family_name": family}
+    if over_18:
+        mock["over_18"] = "yes"
+    r = client.post("/wallet/mock", data=mock)
     r = client.get(r.headers["location"])
     assert r.headers["location"] == "/issued"
     html = client.get("/issued").text

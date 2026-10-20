@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if proof.status == "pending" %}Verification pending{% else %}{{ "Verified name" if proof.verification_level == "legal_name" else "Verified person" }}{% endif %}: {{ proof.handle }}{% endblock %}
+{% block title %}{% if proof.status == "pending" %}Verification pending{% else %}{{ proof_label(proof) }}{% endif %}: {{ proof.handle }}{% endblock %}
 {% block head %}
 <link rel="me" href="{{ proof.account_profile_url }}">
 <meta name="robots" content="noindex, nofollow, noarchive">
@@ -18,11 +18,11 @@
     <form method="post" action="/check/{{ proof.id }}"><button type="submit">Check now</button></form>
     <p class="muted">Unconfirmed proofs are deleted on {{ proof.expires_at | date }}.</p>
   {% elif proof.verification_level == "legal_name" %}
-    <h1>Verified name</h1>
-    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by <strong>{{ proof.name }}</strong>, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>.</p>
+    <h1>{{ proof_label(proof) }}</h1>
+    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by <strong>{{ proof.name }}</strong>, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>{% if proof.age_over_18 %}, and that they are <strong>18 or over</strong>{% endif %}.</p>
   {% else %}
-    <h1>Verified person</h1>
-    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by a real person, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>. No other personal details were published.</p>
+    <h1>{{ proof_label(proof) }}</h1>
+    <p>The account <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> is controlled by a real person, as confirmed on {{ verified_on }} with a government digital ID issued by <strong>{{ issuer_label(proof.issuing_country, proof.issuing_authority) }}</strong>{% if proof.age_over_18 %}, and that they are <strong>18 or over</strong>{% endif %}. No other personal details were published.</p>
   {% endif %}
   {% if proof.status == "active" %}
   <details>

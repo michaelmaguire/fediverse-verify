@@ -17,6 +17,9 @@ class IdentityResult:
     issuing_authority: str | None = None    # mandatory PID metadata; published
     given_name: str | None = None
     family_name: str | None = None
+    # True only if the wallet proved the person is 18 or over (EU Proof of Age attestation,
+    # or computed from the PID birth date, which is then discarded). Never "under 18".
+    age_over_18: bool | None = None
 
     @property
     def full_name(self) -> str | None:
@@ -34,7 +37,7 @@ class WalletRequest:
 class IdentityProvider(Protocol):
     name: str
 
-    async def begin(self, level: str) -> WalletRequest: ...
+    async def begin(self, level: str, include_age: bool = False) -> WalletRequest: ...
 
     async def result(self, request: WalletRequest) -> IdentityResult | None:
         """None while the user hasn't finished; raises on failure."""

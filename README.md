@@ -14,13 +14,15 @@ Design and decisions: [`docs/overview.md`](https://github.com/michaelmaguire/fed
    - **Verified person**: no name; nothing about the person is published beyond the issuer.
 
    Both levels also request and publish `issuing_country` and `issuing_authority`, so readers see which government vouched.
+
+   Either level can add **18+**: the EU Proof of Age attestation (`eu.europa.ec.av.1`, only `age_over_18`) is requested; for Verified name the PID `birthdate` is a fallback, used once and discarded. Only `age_over_18: true` is ever stored or published.
 3. **Their wallet presents the credential** via OpenID4VP (or the mock form in development).
 4. **The verifier publishes a proof page** at `/n/<id>` (name) or `/u/<id>` (person) containing:
    - `<link rel="me">` to the exact profile URL, so stock Mastodon shows a green check;
    - a signed attestation (ES256 JWS, `typ: identity-attestation+jwt`), embedded and at `<page>.jwt`, verifiable with `/.well-known/jwks.json`.
 5. **The user gets a one-time removal code** to remove the proof later, even without the account.
 
-Signed-copy claims: `iss`, `sub` (ActivityPub actor URI), `iat`, `jti` (registered JWT claims), `account_profile_url`, `verification_level` (`person` | `legal_name`), `identity_check_method` (`eudi-pid` | `mock`), `account_ownership_check` (`link-back` | `mastodon-sign-in`), `issuing_country`, `issuing_authority` (EU PID rulebook names), and `name` (legal_name only; OpenID Connect name). There is no `exp`: proofs last until revoked.
+Signed-copy claims: `iss`, `sub` (ActivityPub actor URI), `iat`, `jti` (registered JWT claims), `account_profile_url`, `verification_level` (`person` | `legal_name`), `identity_check_method` (`eudi-pid` | `mock`), `account_ownership_check` (`link-back` | `mastodon-sign-in`), `issuing_country`, `issuing_authority` (EU PID rulebook names), `age_over_18` (only when shown; EU Proof of Age name), and `name` (legal_name only; OpenID Connect name). There is no `exp`: proofs last until revoked.
 
 ## Data kept
 

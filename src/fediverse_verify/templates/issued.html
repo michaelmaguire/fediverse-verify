@@ -3,15 +3,16 @@
 {% block body %}
 <div class="card">
   <h1>Your proof is ready</h1>
+  {% if age_not_confirmed %}<p class="banner">Your wallet didn't confirm that you're 18 or over, so this proof doesn't mention age. Nothing about your age was stored.</p>{% endif %}
   <p><strong>1. Add this link to your profile.</strong></p>
-  <p>Label: <code>{{ "Verified name" if proof.verification_level == "legal_name" else "Verified person" }}</code>
+  <p>Label: <code>{{ proof_label(proof, ", ") }}</code>
      (or any label you like; only the link is checked)<br>
      Value: <code data-proof-url>{{ url }}</code></p>
   <ol class="steps">
     <li>On Mastodon, open your profile and choose <em>Edit profile</em>. Under <em>Custom fields</em>, click <em>Add field</em>:
       {% call example_frame("On your Mastodon server: Edit profile") %}<img src="/static/mastodon-add-field.png" alt="Screenshot of Mastodon's Edit Profile page: the Custom fields section with the Add field button highlighted" width="607" height="104">{% endcall %}</li>
     <li>Enter the label and paste the link as the value, then click <em>Save</em>:
-      {% call example_frame("On your Mastodon server: Add custom field") %}{% with label=("Verified name" if proof.verification_level == "legal_name" else "Verified person"), value=url %}{% include "_mastodon_field_form.html" %}{% endwith %}{% endcall %}
+      {% call example_frame("On your Mastodon server: Add custom field") %}{% with label=proof_label(proof, ", "), value=url %}{% include "_mastodon_field_form.html" %}{% endwith %}{% endcall %}
       {% if url | length > 40 %}<span class="muted">Mastodon warns that the value exceeds the recommended 40 characters. That's fine: save anyway.</span>{% endif %}</li>
   </ol>
   <p class="muted">Images show Mastodon 4.7 (the form above is drawn with your details filled in); other servers look different.</p>

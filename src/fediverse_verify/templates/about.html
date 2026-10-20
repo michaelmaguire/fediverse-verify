@@ -17,9 +17,19 @@
     <tr><td><strong>Verified person</strong><br><span class="muted">link: <code>/u/…</code></span></td>
         <td>"This account is controlled by a real person, confirmed with an ID issued by <em>[country (authority)]</em>." No other personal details.</td>
         <td>Only the issuing country and authority</td></tr>
+    <tr><td><strong>+ 18+</strong> (optional, with either level)</td>
+        <td>"…and they are 18 or over."</td>
+        <td>A yes/no "over 18" answer (<a href="#age">how</a>)</td></tr>
   </table>
   <p class="muted">Readers see which government vouched for the person, so they can weigh it. For the Verified person level this reveals roughly where you're from, at country level only.</p>
   <p class="muted">A proof says nothing about whether someone has other accounts: one person may verify several. Proofs don't expire; they last until removed.</p>
+</div>
+
+<div class="card" id="age">
+  <h2>Showing you're 18 or over</h2>
+  <p>If you choose to add "18+", we ask your wallet for the EU <strong>proof-of-age credential</strong>, which exists for exactly this: it answers only "is this person over 18?" and contains no name, birth date or ID number (<a href="https://github.com/eu-digital-identity-wallet/av-doc-technical-specification">EU Age Verification specification</a>).</p>
+  <p>For the Verified name level only, if you have no proof-of-age credential, we may instead ask for your birth date from your ID. It is used once to work out whether you're 18 or over and then discarded: it's never stored or published. Your name is published at that level anyway; for Verified person we never ask for a birth date.</p>
+  <p class="muted">If your wallet doesn't confirm you're 18 or over, the proof is issued without mentioning age, and nothing about your age is kept. "18+" reflects a check at the time of verification of whoever controlled the account then; services with legal age-check duties may still need their own.</p>
 </div>
 
 <div class="card">
@@ -50,6 +60,7 @@
     <tr><td><code>"account_ownership_check"</code></td><td><code>link-back</code></td><td>How the account was proven yours (or <code>mastodon-sign-in</code>)</td></tr>
     <tr><td><code>"iat"</code></td><td><code>1792500000</code></td><td>When it was issued, in seconds since 1970</td></tr>
     <tr><td><code>"jti"</code></td><td><code>6q3yJY3bcSvJOlvk</code></td><td>The proof's ID, as in its link</td></tr>
+    <tr><td><code>"age_over_18"</code></td><td><code>true</code></td><td>Only present if "18+" was chosen and confirmed (never <code>false</code>)</td></tr>
   </table>
   <p class="muted">The short names <code>iss</code>, <code>sub</code>, <code>iat</code> and <code>jti</code> are fixed by the <a href="https://www.rfc-editor.org/rfc/rfc7519#section-4.1">JSON Web Token standard</a>, <code>name</code> follows OpenID Connect, and the issuer fields use the EU PID rulebook's names. Technically it's a <a href="https://www.rfc-editor.org/rfc/rfc7519">JSON Web Token</a> signed with ES256. It's in the proof page's source, and each proof page has a "What's in the signed copy?" section showing its contents. You can also download it by adding <code>.jwt</code> to the proof link.</p>
 </div>
@@ -93,6 +104,7 @@
         <li>The level, the date, and how you confirmed the account</li>
         <li>Your legal name, <em>only</em> for the Verified name level</li>
         <li>The country and authority that issued your ID</li>
+        <li>"18 or over", only if you chose to show it and it was confirmed</li>
         <li>A <a href="#signed-copy">signed copy</a> of these same details, as embedded in your proof page</li>
         <li>A one-way hash of your removal code (not the code itself)</li>
       </ul></td>
@@ -119,6 +131,7 @@
     <tr><td><code>subject_uri</code>, <code>account_profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub ID (a web link such as <code>https://example.social/users/alice</code>), its profile page link, and your handle such as <code>@alice@example.social</code> (all public already)</td></tr>
     <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
+    <tr><td><code>age_over_18</code></td><td>Set only if you chose to show "18+" and it was confirmed; otherwise empty. We never record that someone is under 18.</td></tr>
     <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code>, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
     <tr><td><code>attestation</code></td><td>The <a href="#signed-copy">signed copy</a> of the proof's details embedded in your proof page (the same facts as the other columns, nothing more); empty while pending</td></tr>
     <tr><td><code>removal_code_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>

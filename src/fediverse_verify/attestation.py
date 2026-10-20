@@ -55,11 +55,12 @@ class Signer:
 def build_claims(*, issuer: str, proof_id: str, subject_uri: str, profile_url: str,
                  level: str, method: str, name: str | None = None,
                  binding: str = "mastodon-sign-in", issuing_country: str | None = None,
-                 issuing_authority: str | None = None) -> dict[str, Any]:
+                 issuing_authority: str | None = None, age_over_18: bool | None = None) -> dict[str, Any]:
     """Claims of the signed copy. No `exp`: proofs stay valid until revoked (docs/overview.md#decided).
 
     iss/sub/iat/jti are registered JWT claims (RFC 7519); name is OpenID Connect's;
-    issuing_country/issuing_authority are EU PID rulebook names. The rest are ours,
+    issuing_country/issuing_authority are EU PID rulebook names; age_over_18 is the EU
+    Proof of Age (and ISO 18013-5) name. The rest are ours,
     named to be self-explanatory.
     """
     if level not in LEVELS:
@@ -78,6 +79,8 @@ def build_claims(*, issuer: str, proof_id: str, subject_uri: str, profile_url: s
         claims["issuing_country"] = issuing_country
     if issuing_authority:
         claims["issuing_authority"] = issuing_authority
+    if age_over_18:
+        claims["age_over_18"] = True       # EU Proof of Age attribute name; never published as false
     if level == "legal_name":
         if not name:
             raise ValueError("legal_name level requires a name")

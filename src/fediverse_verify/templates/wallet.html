@@ -6,6 +6,7 @@
   <p>Account: <strong>{{ flow.account.handle }}</strong>.
      {% if flow.level == "legal_name" %}Your wallet will be asked for your <strong>first and last name</strong> and <strong>which country and authority issued your ID</strong>. All of these are published on your proof page.
      {% else %}Your wallet will be asked only <strong>which country and authority issued your ID</strong>. That is all that's published; nothing else about you.{% endif %}</p>
+  {% if flow.include_age %}<p>You asked to show <strong>18+</strong>: your wallet will also be asked whether you are 18 or over (a yes/no answer).</p>{% endif %}
 
   {% if flow.wallet.kind == "form" %}
     <form method="post" action="/wallet/mock">
@@ -15,6 +16,7 @@
         <label for="given_name">Given name</label><input id="given_name" name="given_name" type="text" required>
         <label for="family_name">Family name</label><input id="family_name" name="family_name" type="text" required>
       {% endif %}
+      {% if flow.include_age %}<label class="choice"><input type="checkbox" name="over_18" value="yes" checked><span>Over 18 (what a proof-of-age credential would confirm)</span></label>{% endif %}
       <label for="issuing_country">Issuing country</label>
       <select id="issuing_country" name="issuing_country">
         {% for code, name in country_names | dictsort(by="value") %}<option value="{{ code }}"{% if code == "IT" %} selected{% endif %}>{{ name }}</option>{% endfor %}
