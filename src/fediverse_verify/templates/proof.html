@@ -12,7 +12,7 @@
 {% endblock %}
 {% block body %}
 <div class="card">
-  {% if proof.identity_check_method == "mock" %}<div class="banner">TEST PROOF: no real identity was checked.</div>{% endif %}
+  {% if is_test_method(proof.identity_check_method) %}<div class="banner">TEST PROOF: no real identity was checked{% if proof.identity_check_method == "swiyu-beta-id" %} (a swiyu Beta-ID, whose details its holder chooses){% endif %}.</div>{% endif %}
   {% if proof.status == "pending" %}
     <h1>Verification pending</h1>
     <p>Waiting for <a href="{{ proof.account_profile_url }}" rel="me">{{ proof.handle }}</a> to link to this page from its profile. Nothing is confirmed yet.</p>

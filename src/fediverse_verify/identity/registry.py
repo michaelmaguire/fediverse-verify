@@ -47,7 +47,8 @@ def build_providers(settings: Settings, http: httpx.AsyncClient) -> dict[str, Id
         if name == "eudi":
             providers[name] = EudiProvider(http, settings.eudi_endpoint, settings.eudi_wallet_scheme)
         elif name == "swiyu":
-            providers[name] = SwiyuProvider(http, settings.swiyu_endpoint, settings.swiyu_issuer_dids)
+            providers[name] = SwiyuProvider(http, settings.swiyu_endpoint, settings.swiyu_issuer_dids,
+                                            *([settings.swiyu_vct_values] if settings.swiyu_vct_values else []))
         elif name == "mock":
             providers[name] = MockProvider("mock", "eu", settings.public_url, settings.test_wallet_url,
                                            EU_MEMBER_STATES)

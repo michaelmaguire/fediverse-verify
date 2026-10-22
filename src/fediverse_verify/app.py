@@ -30,7 +30,7 @@ from .binding import BoundAccount
 from .binding.linkback import LinkBackBinding
 from .binding.mastodon import Authorization, BindingError, MastodonBinding
 from .config import Settings
-from .identity import IdentityError, IdentityProvider, WalletRequest
+from .identity import IdentityError, IdentityProvider, WalletRequest, is_test_method
 from .identity.mock import MockProvider
 from .identity.registry import WALLET_TYPES, build_providers
 from .net import UnsafeHostError
@@ -87,7 +87,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                                  wallet_types=WALLET_TYPES,
                                  build=buildinfo.detect(settings.source_url))
     templates.env.filters["date"] = lambda ts: time.strftime("%Y-%m-%d", time.gmtime(ts))
-    templates.env.globals.update(issuer_label=issuer_label, country_names=COUNTRY_NAMES)
+    templates.env.globals.update(issuer_label=issuer_label, country_names=COUNTRY_NAMES, is_test_method=is_test_method)
     templates.env.globals.update(signing_key_id=signer.kid)
 
     def proof_label(proof: Proof, sep: str = " · ") -> str:

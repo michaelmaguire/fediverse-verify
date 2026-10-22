@@ -23,6 +23,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
+from .identity import is_test_method
+
 CREDENTIALS_V2 = "https://www.w3.org/ns/credentials/v2"
 # Term namespace for our claims; to be registered at w3id.org with the FEP.
 VOCAB = "https://w3id.org/fediverse-verified#"
@@ -145,5 +147,6 @@ def build_credential(*, proof_url: str, issuer: str, claims: dict[str, Any]) -> 
             "type": "FediverseVerifiedEvidence",
             "identity_check_method": claims["identity_check_method"],
             "account_ownership_check": claims["account_ownership_check"],
+            **({"test": True} if is_test_method(claims["identity_check_method"]) else {}),
         }],
     }

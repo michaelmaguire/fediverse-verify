@@ -7,7 +7,8 @@ import json
 import rfc8785
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from fediverse_verify.credential import (ActorKey, b58decode, b58encode, public_key_from_multikey, verify)
+from fediverse_verify.credential import (ActorKey, b58decode, b58encode, build_credential,
+                                         public_key_from_multikey, verify)
 
 from .conftest import ACTOR_URI, PROFILE_URL, verify as run_verify
 
@@ -48,6 +49,7 @@ def test_proof_publishes_a_signed_w3c_credential(client):
     assert subject["verification_level"] == "legal_name" and subject["name"] == "Mario Rossi"
     assert subject["age_over_18"] is True
     assert vc["evidence"][0]["identity_check_method"] == "mock"
+    assert vc["evidence"][0]["test"] is True                  # test proofs say so in the signed evidence
     assert vc["proof"]["cryptosuite"] == "eddsa-jcs-2022"
     assert 'id="fediverse-verified-credential"' in client.get(path_of(url)).text
 
@@ -89,3 +91,10 @@ def test_webfinger_answers_the_handle_without_a_port(tmp_path):
             r = c.get("/.well-known/webfinger", params={"resource": resource})
             assert r.status_code == 200 and r.json()["subject"] == resource
             assert r.json()["links"][0]["href"] == "https://verify.localhost:8443/actor"
+
+
+def test_real_identity_checks_carry_no_test_marker():
+    claims = {"sub": ACTOR_URI, "account_profile_url": PROFILE_URL, "verification_level": "person", "iat": 0,
+              "identity_check_method": "eudi-pid", "account_ownership_check": "link-back"}
+    vc = build_credential(proof_url="https://verify.test/u/x", issuer="https://verify.test/actor", claims=claims)
+    assert "test" not in vc["evidence"][0]

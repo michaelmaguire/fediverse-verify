@@ -10,9 +10,10 @@ from fastapi.testclient import TestClient
 
 from fediverse_verify.app import create_app
 from fediverse_verify.config import Settings
-from fediverse_verify.identity import IdentityError
+from fediverse_verify.identity import IdentityError, is_test_method
 from fediverse_verify.identity.registry import build_providers
-from fediverse_verify.identity.swiyu import DEFAULT_VCT_VALUES, SwiyuProvider, dcql_for
+from fediverse_verify.identity.swiyu import (BETA_ID_VCT_VALUES, DEFAULT_VCT_VALUES, SwiyuProvider, dcql_for,
+                                            vqps_submissions)
 
 from .conftest import HOST, csrf_from
 
@@ -53,9 +54,12 @@ class FakeSwiyu:
         return httpx.Response(404)
 
 
-async def run(fake, level="legal_name", include_age=False):
+REAL_EID_VCT = "urn:vct:ch.admin.fedpol.eid"     # placeholder until the real e-ID type is published
+
+
+async def run(fake, level="legal_name", include_age=False, vct_values=(REAL_EID_VCT,)):
     provider = SwiyuProvider(httpx.AsyncClient(transport=httpx.MockTransport(fake.handler)),
-                             "https://swiyu.internal", (ISSUER,))
+                             "https://swiyu.internal", (ISSUER,), vct_values)
     request = await provider.begin(level, include_age)
     return provider, request, await provider.result(request)
 
@@ -78,6 +82,23 @@ async def test_success_maps_claims():
     _, _, result = await run(fake, "legal_name", include_age=True)
     assert (result.method, result.full_name, result.issuing_country, result.issuing_authority, result.age_over_18) == \
         ("swiyu-eid", "Heidi Muster", "CH", "fedpol", True)
+
+
+@pytest.mark.anyio
+async def test_beta_id_is_a_test_method():
+    claims = {"given_name": "Heidi", "family_name": "Muster", "issuing_country": "CH"}
+    _, _, result = await run(FakeSwiyu(claims=claims), vct_values=BETA_ID_VCT_VALUES)
+    assert result.method == "swiyu-beta-id" and is_test_method(result.method)
+
+
+@pytest.mark.anyio
+async def test_beta_id_recognised_by_its_type_even_when_real_types_also_accepted():
+    claims = {"vct": "betaid-sdjwt", "issuing_country": "CH"}
+    _, _, result = await run(FakeSwiyu(claims=claims), "person", vct_values=(REAL_EID_VCT, *BETA_ID_VCT_VALUES))
+    assert result.method == "swiyu-beta-id"
+    _, _, result = await run(FakeSwiyu(claims={"vct": REAL_EID_VCT, "issuing_country": "CH"}), "person",
+                             vct_values=(REAL_EID_VCT, *BETA_ID_VCT_VALUES))
+    assert result.method == "swiyu-eid" and not is_test_method(result.method)
 
 
 @pytest.mark.anyio
@@ -245,7 +266,11 @@ def test_choosing_swiss_contacts_only_the_swiss_verifier(real_both):
         url = c.get("/issued").text.split("<code data-proof-url>")[1].split("</code>")[0]
         claims = jwt.decode(c.get(url.removeprefix("https://verify.test") + ".jwt").text,
                             options={"verify_signature": False})
-        assert claims["identity_check_method"] == "swiyu-eid" and claims["issuing_country"] == "CH"
+        # No real e-ID type configured, so this is the Sandbox Beta-ID: a test proof.
+        assert claims["identity_check_method"] == "swiyu-beta-id" and claims["issuing_country"] == "CH"
+        path = url.removeprefix("https://verify.test")
+        assert "TEST PROOF" in c.get(path).text
+        assert c.get(path + ".json").json()["evidence"][0]["test"] is True
 
 
 def test_unreachable_system_says_so(real_both):
@@ -254,3 +279,28 @@ def test_unreachable_system_says_so(real_both):
         page = signed_in(c)
         r = c.post("/wallet/choose", data={"csrf": csrf_from(page), "wallet": "swiyu"})
         assert r.status_code == 502 and "can&#39;t be reached" in r.text
+
+
+# ---- trust registry statements (vqPS) ----
+
+def test_vqps_covers_every_query_we_send_within_swiyu_limits():
+    subs = vqps_submissions("did:webvh:x", (REAL_EID_VCT,))
+    assert [s["scope"] for s in subs] == ["org.fediverse-verify.person", "org.fediverse-verify.person.age18",
+                                          "org.fediverse-verify.legal_name", "org.fediverse-verify.legal_name.age18"]
+    for s in subs:
+        assert s["sub"] == "did:webvh:x"
+        assert len(s["purpose_name"]["default"]) <= 40           # swiyu limit
+        assert len(s["purpose_description"]["default"]) <= 1000  # swiyu limit
+    assert subs[3]["query"] == dcql_for("legal_name", True, (REAL_EID_VCT,))
+
+
+@pytest.mark.anyio
+async def test_vqps_matches_what_begin_sends():
+    fake = FakeSwiyu(state="PENDING")
+    await run(fake, "legal_name", include_age=True)
+    sent = fake.created
+    statement = vqps_submissions("did:webvh:x", (REAL_EID_VCT,))[3]
+    assert sent["verification_purpose"]["scope"] == statement["scope"]
+    assert sent["verification_purpose"]["purpose_name"] == statement["purpose_name"]
+    assert sent["verification_purpose"]["purpose_description"] == statement["purpose_description"]
+    assert sent["dcql_query"] == statement["query"]

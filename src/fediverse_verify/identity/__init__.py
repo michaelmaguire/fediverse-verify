@@ -10,9 +10,19 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+# Methods that check no real identity: our test wallets, and the swiyu Beta-ID (the
+# person types in any details they like). Proofs made with them are marked as test
+# proofs ("test": true in the signed evidence) and must never earn a badge.
+TEST_METHODS = frozenset({"mock", "swiyu-beta-id"})
+
+
+def is_test_method(method: str) -> bool:
+    return method in TEST_METHODS
+
+
 @dataclass(frozen=True)
 class IdentityResult:
-    method: str                 # e.g. "eudi-pid" or "mock"; published in the attestation
+    method: str                 # e.g. "eudi-pid", "swiyu-eid", or a TEST_METHODS value; published
     issuing_country: str | None = None      # ISO 3166-1 alpha-2, mandatory PID metadata; published
     issuing_authority: str | None = None    # mandatory PID metadata; published
     given_name: str | None = None

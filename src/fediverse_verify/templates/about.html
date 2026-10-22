@@ -57,7 +57,7 @@
     <tr><td><code>"name"</code></td><td><code>Mario Rossi</code></td><td>The legal name, only for the fediverse-verified name level</td></tr>
     <tr><td><code>"issuing_country"</code></td><td><code>IT</code></td><td>Country that issued the ID</td></tr>
     <tr><td><code>"issuing_authority"</code></td><td><code>Ministero dell'Interno</code></td><td>Authority that issued the ID</td></tr>
-    <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked: <code>eudi-pid</code> (EU wallet), <code>swiyu-eid</code> (Swiss e-ID), or <code>mock</code> in test mode</td></tr>
+    <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked: <code>eudi-pid</code> (EU wallet), <code>swiyu-eid</code> (Swiss e-ID), or, for test proofs that check no real identity, <code>mock</code> (test mode) or <code>swiyu-beta-id</code> (swiyu Sandbox Beta-ID). Test proofs also carry <code>"test": true</code> in the signed copy's evidence</td></tr>
     <tr><td><code>"account_ownership_check"</code></td><td><code>link-back</code></td><td>How the account was proven yours (or <code>mastodon-sign-in</code>)</td></tr>
     <tr><td><code>"iat"</code></td><td><code>1792500000</code></td><td>When it was issued, in seconds since 1970</td></tr>
     <tr><td><code>"jti"</code></td><td><code>6q3yJY3bcSvJOlvk</code></td><td>The proof's ID, as in its link</td></tr>
@@ -139,7 +139,7 @@
     <tr><td><code>name</code></td><td>Your legal name, for the fediverse-verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
     <tr><td><code>age_over_18</code></td><td>Set only if you chose to show "18+" and it was confirmed; otherwise empty. We never record that someone is under 18.</td></tr>
-    <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code> for an EU wallet, <code>swiyu-eid</code> for the Swiss e-ID, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
+    <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code> for an EU wallet, <code>swiyu-eid</code> for the Swiss e-ID, or <code>mock</code> / <code>swiyu-beta-id</code> for test proofs) and how you proved the account is yours</td></tr>
     <tr><td><code>credential</code></td><td>The same signed copy as a W3C Verifiable Credential (<a href="#signed-copy">second form</a>); empty while pending</td></tr>
     <tr><td><code>attestation</code></td><td>The <a href="#signed-copy">signed copy</a> of the proof's details embedded in your proof page (the same facts as the other columns, nothing more); empty while pending</td></tr>
     <tr><td><code>removal_code_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
@@ -162,6 +162,7 @@
   <ul>
     <li><strong>In this service's memory</strong> (gone when it restarts): your session while you verify or sign in, for up to {{ flow_minutes }} minutes (your account, the chosen level and the wallet request ID; in test mode, also the details typed into the mock wallet until they're read), and the time of the last check of each pending proof.</li>
     <li><strong>In the EU verifier component</strong>, which talks to your wallet (used only with real wallets, not in test mode): the wallet's response (only the details requested above), in memory, for at most about 40 minutes, after which its clean-up deletes it.</li>
+    <li><strong>In the Swiss verifier component</strong> (used only for the Swiss e-ID): the wallet's response (only the details requested above), in its database, for at most about 15 minutes, after which its clean-up deletes it.</li>
     <li><strong>In your browser</strong>: a signed (not encrypted) session cookie, <code>fv_session</code>, holding your session ID, and the new proof's ID and removal code until the "proof is ready" page has been shown once. It stays on your device.</li>
     <li><strong>Logs</strong>: request logging is turned off, so visits, IP addresses and proof IDs are not logged by this service. Only errors are logged, to the server console.</li>
   </ul>
