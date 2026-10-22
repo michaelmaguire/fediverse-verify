@@ -31,6 +31,7 @@ from urllib.parse import quote
 import cbor2
 import httpx
 
+from ..binding.webfinger import json_object
 from . import IdentityError, IdentityResult, WalletRequest
 
 PID_VCT = "urn:eudi:pid:1"
@@ -129,7 +130,7 @@ class EudiProvider:
         })
         if resp.status_code != 200:
             raise IdentityError(f"verifier endpoint returned {resp.status_code}")
-        tx = resp.json()
+        tx = json_object(resp, "the EU verifier endpoint", IdentityError)
         wallet_url = (f"{self._scheme}?client_id={quote(tx['client_id'], safe='')}"
                       f"&request_uri={quote(tx['request_uri'], safe='')}")
         self._requests[tx["transaction_id"]] = (level, include_age)
@@ -142,7 +143,7 @@ class EudiProvider:
         if resp.status_code != 200:
             raise IdentityError(f"wallet response unavailable ({resp.status_code})")
         level, include_age = self._requests.pop(request.handle, ("person", False))
-        vp_token = resp.json().get("vp_token", {})
+        vp_token = json_object(resp, "the EU verifier endpoint", IdentityError).get("vp_token") or {}
         pid_tokens = vp_token.get(PID_QUERY) or vp_token.get(PID_WITH_BIRTHDATE_QUERY) or []
         if not pid_tokens:
             raise IdentityError("wallet returned no PID")

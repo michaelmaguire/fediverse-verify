@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import httpx
 
+from ..binding.webfinger import json_object
 from . import IdentityError, IdentityResult, WalletRequest
 
 CREDENTIAL_ID = "eid"
@@ -116,7 +117,7 @@ class SwiyuProvider:
         })
         if resp.status_code != 200:
             raise IdentityError(f"swiyu verifier returned {resp.status_code}")
-        body = resp.json()
+        body = json_object(resp, "the Swiss verifier", IdentityError)
         self._requests[body["id"]] = (level, include_age)
         return WalletRequest(kind="qr", wallet_url=body["verification_deeplink"], handle=body["id"])
 
@@ -124,7 +125,7 @@ class SwiyuProvider:
         resp = await self._http.get(f"{self._endpoint}/management/api/verifications/{request.handle}")
         if resp.status_code != 200:
             raise IdentityError(f"verification unavailable ({resp.status_code})")
-        body = resp.json()
+        body = json_object(resp, "the Swiss verifier", IdentityError)
         state = body.get("state")
         if state == "PENDING":
             return None

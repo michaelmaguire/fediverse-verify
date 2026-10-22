@@ -92,7 +92,11 @@ class LinkBackBinding:
                                     params={"acct": username})
         if resp.status_code != 200:
             return False
-        for field in resp.json().get("fields") or []:
+        try:
+            data = resp.json()
+        except ValueError:
+            return False
+        for field in (data.get("fields") if isinstance(data, dict) else None) or []:
             if any(_same_url(href, url) for href in links_in(field.get("value", ""))):
                 return True
         return False

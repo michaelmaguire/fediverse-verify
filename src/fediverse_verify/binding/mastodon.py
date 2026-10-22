@@ -13,7 +13,7 @@ import httpx
 from ..net import ensure_public_host, normalize_host
 from ..store import OAuthClient, Store
 from . import BoundAccount
-from .webfinger import WebFingerError, finger
+from .webfinger import WebFingerError, finger, json_object
 
 SCOPES = "read:accounts"
 
@@ -110,7 +110,9 @@ class MastodonBinding:
         })
         if resp.status_code != 200:
             raise BindingError(f"{host} refused app registration ({resp.status_code})")
-        body = resp.json()
+        body = json_object(resp, host, BindingError)
+        if not body.get("client_id") or not body.get("client_secret"):
+            raise BindingError(f"{host} didn't register this verifier as an app")
         client = OAuthClient(host=host, client_id=body["client_id"], client_secret=body["client_secret"],
                              redirect_uri=self._redirect_uri)
         self._store.put_client(client)
@@ -127,7 +129,10 @@ class MastodonBinding:
         })
         if resp.status_code != 200:
             raise BindingError("sign-in failed; please try again")
-        return resp.json()["access_token"]
+        token = json_object(resp, client.host, BindingError).get("access_token")
+        if not token:
+            raise BindingError("sign-in failed; please try again")
+        return token
 
     async def _revoke(self, client: OAuthClient, token: str) -> bool:
         """Cancel the access token on the user's server (RFC 7009). True if the server confirmed."""
@@ -144,4 +149,4 @@ class MastodonBinding:
         resp = await self._http.get(f"https://{host}{path}", headers=headers, params=params)
         if resp.status_code != 200:
             raise BindingError(f"{host} returned {resp.status_code} for {path}")
-        return resp.json()
+        return json_object(resp, host, BindingError)

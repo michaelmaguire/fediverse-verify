@@ -26,10 +26,13 @@ class FakeMastodon:
         self.stale_actor_fields: list[dict] | None = None   # set: actor shows these (cache), lookup shows fields
         self.revoke_fails = False             # True: /oauth/revoke errors
         self.app_scopes: list[str] = []
+        self.empty_answers = False            # True: answer everything with an empty 200, like a bare proxy
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
         assert url.host == HOST, f"unexpected request to {url}"
+        if self.empty_answers:
+            return httpx.Response(200, content=b"")
         if url.path == "/api/v1/apps":
             self.apps += 1
             self.app_scopes.append(parse_qs(request.content.decode())["scopes"][0])
