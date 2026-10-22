@@ -1,0 +1,18 @@
+---
+# Generate with scripts/generate-secrets.sh, then:
+#   mkdir -p inventory/group_vars/verifier
+#   scripts/generate-secrets.sh > inventory/group_vars/verifier/vault.yml
+#   ansible-vault encrypt inventory/group_vars/verifier/vault.yml
+# The vault is also the offline backup of the verifier's keys: keep the vault file and
+# its password (.vault-password) somewhere safe outside this machine.
+vault_luks_passphrase: ""            # without it the data is unrecoverable
+vault_verifier_session_secret: ""
+vault_verifier_signing_key: |        # EC P-256, signs the JWT copy of proofs
+  -----BEGIN PRIVATE KEY-----
+  -----END PRIVATE KEY-----
+vault_verifier_actor_key: |          # Ed25519, signs the credential (the verifier actor's key)
+  -----BEGIN PRIVATE KEY-----
+  -----END PRIVATE KEY-----
+# Only with swiyu (see swiyu-registration.md):
+# vault_swiyu_signing_key: |         # the EC key matching verifier_swiyu_verification_method
+# vault_swiyu_db_password: ""

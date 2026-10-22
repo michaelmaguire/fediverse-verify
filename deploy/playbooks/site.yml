@@ -1,0 +1,10 @@
+---
+- name: Provision the Fediverse Verify host
+  hosts: verifier
+  become: true
+  roles:
+    - base
+    - encrypted_storage
+    - rootless_docker
+    - verifier
+    - caddy          # after verifier: its sites depend on the wallet types chosen there

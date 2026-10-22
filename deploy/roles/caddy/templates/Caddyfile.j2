@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+# No "log" directives: Caddy keeps no access logs unless asked to.
+{
+	email {{ letsencrypt_email }}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}
+
+{{ verifier_domain }} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+}
+{% if verifier_uses_test_wallets %}
+
+{{ verifier_test_wallet_domain }} {
+	import security_headers
+	reverse_proxy 127.0.0.1:8001
+}
+{% endif %}
+{% if verifier_uses_eudi %}
+
+# Wallets only; the /ui management API stays private (Fediverse Verify calls it directly).
+{{ verifier_eudi_domain }} {
+	import security_headers
+	@wallet path /wallet/*
+	reverse_proxy @wallet 127.0.0.1:8081
+	respond 404
+}
+{% endif %}
+{% if verifier_uses_swiyu %}
+
+# Wallets only; the /management API stays private (Fediverse Verify calls it directly).
+{{ verifier_swiyu_domain }} {
+	import security_headers
+	@wallet path /oid4vp/*
+	reverse_proxy @wallet 127.0.0.1:8083
+	respond 404
+}
+{% endif %}

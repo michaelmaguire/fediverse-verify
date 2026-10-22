@@ -1,0 +1,134 @@
+---
+- name: Work out which components are needed
+  ansible.builtin.set_fact:
+    verifier_uses_test_wallets: "{{ verifier_identity_providers | intersect(['mock', 'mock-ch']) | length > 0 }}"
+    verifier_uses_eudi: "{{ 'eudi' in verifier_identity_providers }}"
+    verifier_uses_swiyu: "{{ 'swiyu' in verifier_identity_providers }}"
+
+- name: Check settings and vault
+  ansible.builtin.assert:
+    that:
+      - verifier_identity_providers | length > 0
+      - not (verifier_uses_test_wallets and (verifier_uses_eudi or verifier_uses_swiyu))
+      - vault_verifier_session_secret | default('') | length >= 32
+      - vault_verifier_signing_key | default('') is search('BEGIN PRIVATE KEY')
+      - vault_verifier_actor_key | default('') is search('BEGIN PRIVATE KEY')
+      - not verifier_uses_swiyu or (verifier_swiyu_did and verifier_swiyu_verification_method
+        and verifier_swiyu_issuer_dids and vault_swiyu_signing_key | default('')
+        and vault_swiyu_db_password | default(''))
+    fail_msg: >-
+      Check verifier_identity_providers (test and real wallet types can't be mixed) and the vault:
+      session secret, both verifier keys (scripts/generate-secrets.sh), and for swiyu the DID
+      settings, vault_swiyu_signing_key and vault_swiyu_db_password.
+    quiet: true
+
+- name: Install git
+  ansible.builtin.apt:
+    name: git
+    state: present
+
+- name: Fetch the source
+  become: true
+  become_user: "{{ verifier_user }}"
+  ansible.builtin.git:
+    repo: "{{ verifier_repo }}"
+    dest: "{{ verifier_dir }}/src"
+    version: "{{ verifier_version }}"
+    force: true
+  register: verifier_source
+
+# The container runs as uid 10001; rootless Docker maps it to a subordinate uid of the
+# service user. The data folder belongs to that uid so the verifier, and only it, can use it.
+- name: Find the service user's subordinate uid range
+  ansible.builtin.shell: "set -o pipefail && grep '^{{ verifier_user }}:' /etc/subuid | cut -d: -f2"
+  args:
+    executable: /bin/bash
+  register: subuid
+  changed_when: false
+
+- name: Compute the host uid of the container user
+  ansible.builtin.set_fact:
+    verifier_data_uid: "{{ (subuid.stdout | int) + 10001 - 1 }}"
+
+- name: Create the data folder
+  ansible.builtin.file:
+    path: "{{ verifier_dir }}/data"
+    state: directory
+    owner: "{{ verifier_data_uid }}"
+    group: "{{ verifier_data_uid }}"
+    mode: "0700"
+
+# The keys live in the vault (your offline copy); the server gets them only if it has none.
+# Replacing a key would invalidate every proof already published, so never overwrite.
+- name: Install the verifier's keys (first deploy only)
+  ansible.builtin.copy:
+    dest: "{{ verifier_dir }}/data/{{ item.file }}"
+    content: "{{ item.key }}"
+    owner: "{{ verifier_data_uid }}"
+    group: "{{ verifier_data_uid }}"
+    mode: "0600"
+    force: false
+  loop:
+    - { file: signing-key.pem, key: "{{ vault_verifier_signing_key }}" }
+    - { file: actor-ed25519.pem, key: "{{ vault_verifier_actor_key }}" }
+  loop_control:
+    label: "{{ item.file }}"
+  no_log: true
+
+- name: Read back the keys on the server
+  ansible.builtin.stat:
+    path: "{{ verifier_dir }}/data/{{ item }}"
+    checksum_algorithm: sha1
+  loop: [signing-key.pem, actor-ed25519.pem]
+  register: key_files
+
+- name: Refuse to run with keys that differ from the vault
+  ansible.builtin.assert:
+    that:
+      - key_files.results[0].stat.checksum == (vault_verifier_signing_key | hash('sha1'))
+      - key_files.results[1].stat.checksum == (vault_verifier_actor_key | hash('sha1'))
+    fail_msg: >-
+      The keys on the server differ from those in the vault. Proofs are signed with the
+      server's keys, so put those in the vault (never the other way round) and run again.
+    quiet: true
+
+- name: Write the settings (secrets included)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ verifier_dir }}/{{ item }}"
+    owner: "{{ verifier_user }}"
+    mode: "0600"
+  loop: "{{ ['verifier.env'] + (['swiyu.env', 'swiyu-db.env'] if verifier_uses_swiyu else []) }}"
+  no_log: true
+  register: verifier_env
+
+- name: Write the compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ verifier_dir }}/docker-compose.yml"
+    owner: "{{ verifier_user }}"
+    mode: "0644"
+  register: verifier_compose
+
+- name: Build and start
+  become: true
+  become_user: "{{ verifier_user }}"
+  environment:
+    DOCKER_HOST: "{{ rootless_docker_host }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ rootless_docker_uid }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ verifier_dir }}"
+    build: "{{ 'always' if verifier_source.changed else 'policy' }}"
+    pull: missing
+    recreate: "{{ 'always' if (verifier_env.changed or verifier_compose.changed) else 'auto' }}"
+    remove_orphans: true
+    wait: true
+    wait_timeout: 300
+
+- name: Check the verifier answers
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8000/about
+  register: about
+  until: about.status == 200
+  retries: 12
+  delay: 5

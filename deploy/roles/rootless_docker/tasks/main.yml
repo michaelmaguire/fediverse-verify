@@ -1,0 +1,138 @@
+---
+# Rootless Docker per https://docs.docker.com/engine/security/rootless/
+- name: Add Docker apt key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+- name: Install Docker engine and rootless extras
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+      - docker-ce-rootless-extras
+      - uidmap
+      - dbus-user-session
+      - slirp4netns
+    state: present
+    update_cache: true
+
+- name: Disable the rootful Docker daemon
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: [docker.service, docker.socket]
+
+# Ubuntu 23.10+ restricts unprivileged user namespaces via AppArmor.
+- name: Allow rootlesskit to create user namespaces (AppArmor)
+  ansible.builtin.copy:
+    dest: /etc/apparmor.d/usr.bin.rootlesskit
+    content: |
+      abi <abi/4.0>,
+      include <tunables/global>
+
+      /usr/bin/rootlesskit flags=(unconfined) {
+        userns,
+
+        include if exists <local/usr.bin.rootlesskit>
+      }
+    mode: "0644"
+  register: apparmor_profile
+
+- name: Reload AppArmor  # noqa: no-handler
+  when: apparmor_profile.changed
+  ansible.builtin.systemd:
+    name: apparmor
+    state: restarted
+
+- name: Create the service user
+  ansible.builtin.user:
+    name: "{{ rootless_docker_user }}"
+    shell: /bin/bash
+    create_home: true
+    home: "{{ rootless_docker_home_dir or omit }}"
+  register: docker_user
+
+- name: Start the user's session only once its (encrypted) home is mounted
+  when: rootless_docker_requires_mount | length > 0
+  block:
+    - name: Create user@ drop-in directory
+      ansible.builtin.file:
+        path: "/etc/systemd/system/user@{{ docker_user.uid }}.service.d"
+        state: directory
+        mode: "0755"
+
+    - name: Require the mount (the unlock service starts the session afterwards)
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/user@{{ docker_user.uid }}.service.d/encrypted-home.conf"
+        content: |
+          [Unit]
+          ConditionPathIsMountPoint={{ rootless_docker_requires_mount }}
+        mode: "0644"
+      register: user_dropin
+
+    - name: Reload systemd  # noqa: no-handler
+      when: user_dropin.changed
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+# useradd on Ubuntu allocates these automatically; just confirm they exist.
+- name: Check subordinate UID/GID ranges
+  ansible.builtin.command: "grep -q '^{{ rootless_docker_user }}:' {{ item }}"
+  loop: [/etc/subuid, /etc/subgid]
+  changed_when: false
+
+- name: Keep the user's systemd instance running without a login (linger)
+  ansible.builtin.command: "loginctl enable-linger {{ rootless_docker_user }}"
+  args:
+    creates: "/var/lib/systemd/linger/{{ rootless_docker_user }}"
+
+- name: Start the user's systemd manager
+  ansible.builtin.systemd:
+    name: "user@{{ docker_user.uid }}.service"
+    state: started
+
+- name: Set up rootless Docker for the service user
+  become: true
+  become_user: "{{ rootless_docker_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ docker_user.uid }}"
+  ansible.builtin.command: dockerd-rootless-setuptool.sh install
+  args:
+    creates: "{{ docker_user.home }}/.config/systemd/user/docker.service"
+
+- name: Enable and start rootless Docker
+  become: true
+  become_user: "{{ rootless_docker_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ docker_user.uid }}"
+  ansible.builtin.systemd:
+    name: docker
+    scope: user
+    enabled: true
+    state: started
+
+- name: Export DOCKER_HOST for interactive shells
+  ansible.builtin.lineinfile:
+    path: "{{ docker_user.home }}/.bashrc"
+    line: "export DOCKER_HOST=unix:///run/user/{{ docker_user.uid }}/docker.sock"
+    owner: "{{ rootless_docker_user }}"
+
+- name: Expose facts for later roles
+  ansible.builtin.set_fact:
+    rootless_docker_uid: "{{ docker_user.uid }}"
+    rootless_docker_home: "{{ docker_user.home }}"
+    rootless_docker_host: "unix:///run/user/{{ docker_user.uid }}/docker.sock"

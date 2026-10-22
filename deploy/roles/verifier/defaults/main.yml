@@ -1,0 +1,48 @@
+---
+# Fediverse Verify and, optionally, the wallet-facing components it needs.
+# Set your values in inventory/hosts.yml (see hosts.example.yml); secrets in the vault.
+
+verifier_user: verifier
+verifier_dir: "{{ rootless_docker_home }}/fediverse-verify"
+
+# ---- Source ---------------------------------------------------------------------
+# Built on the server from this repository, so the footer's commit link shows exactly
+# what runs. Pin a tag or commit for production.
+verifier_repo: https://github.com/michaelmaguire/fediverse-verify.git
+verifier_version: main
+
+# ---- Site -----------------------------------------------------------------------
+verifier_domain: verify.example.org
+verifier_app_name: Fediverse Verify
+verifier_operator_contact: ""            # email or URL shown on /about for removal requests
+letsencrypt_email: you@example.org
+
+# Wallet types offered: eudi, swiyu; or for a demo only mock (EU-style test apps) and
+# mock-ch (Swiss-style). Test and real types can't be mixed.
+verifier_identity_providers: [mock, mock-ch]
+
+# Set once registered as an EU wallet relying party (shown on /about).
+verifier_rp_registrar: ""                # e.g. "AgID (Italy)"
+verifier_rp_register_url: ""
+
+# ---- Test wallet apps (only with mock / mock-ch) ---------------------------------
+verifier_test_wallet_domain: "wallet.{{ verifier_domain }}"
+
+# ---- EU Digital Identity Wallets (only with eudi) --------------------------------
+# The EU reference verifier endpoint. Wallets reach only its /wallet/* paths.
+verifier_eudi_domain: "eudi.{{ verifier_domain }}"
+verifier_eudi_image: ghcr.io/eu-digital-identity-wallet/eudi-srv-verifier-endpoint:v0.12.0
+
+# ---- Swiss e-ID (only with swiyu) -------------------------------------------------
+# The federal generic verifier. Wallets reach only its /oid4vp/* paths.
+# Registration: ../swiyu-registration.md. DID values are public; the key is in the vault.
+verifier_swiyu_domain: "swiyu.{{ verifier_domain }}"
+verifier_swiyu_image: ghcr.io/swiyu-admin-ch/swiyu-verifier:5.0.1
+verifier_swiyu_did: ""
+verifier_swiyu_verification_method: ""
+verifier_swiyu_issuer_dids: []
+verifier_swiyu_vct_values: []            # empty: the Sandbox Beta-ID (test proofs only)
+verifier_swiyu_client_name: "{{ verifier_app_name }}"
+
+# ---- Images for supporting services ------------------------------------------------
+verifier_postgres_image: postgres:17-alpine

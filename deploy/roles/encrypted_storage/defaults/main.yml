@@ -1,0 +1,14 @@
+---
+# LUKS-encrypted storage for a service's data. The passphrase lives only in your local
+# Ansible vault (vault_luks_passphrase) and is asked for at every boot.
+# Generic: also used by fediverse-verify/deploy (keep the two copies in sync).
+encrypted_storage_name: data                     # /dev/mapper/<name>, <name>-unlock.service
+encrypted_storage_mount: /srv/data
+# "file": a LUKS container file on the root disk (no extra OVH volume needed).
+# "device": a dedicated block device, e.g. an attached OVH Block Storage volume.
+encrypted_storage_backing: file
+encrypted_storage_file: "/var/lib/{{ encrypted_storage_name }}.luks"
+encrypted_storage_file_size_gb: 40               # sized once at creation; grow it manually later
+encrypted_storage_device: /dev/sdb               # only for backing: device; ALL DATA ON IT IS ERASED
+# Service user whose systemd session (rootless Docker) starts once the data is unlocked.
+encrypted_storage_user: ""

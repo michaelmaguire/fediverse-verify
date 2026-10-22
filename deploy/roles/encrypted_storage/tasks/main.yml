@@ -1,0 +1,95 @@
+---
+- name: Require a LUKS passphrase in the vault
+  ansible.builtin.assert:
+    that: vault_luks_passphrase is defined and (vault_luks_passphrase | length) >= 16
+    fail_msg: "Set vault_luks_passphrase (16+ characters) in your inventory vault"
+    quiet: true
+
+- name: Install cryptsetup
+  ansible.builtin.apt:
+    name: cryptsetup
+    state: present
+
+- name: Pick the backing store
+  ansible.builtin.set_fact:
+    encrypted_storage_source: "{{ encrypted_storage_file if encrypted_storage_backing == 'file' else encrypted_storage_device }}"
+
+- name: Allocate the container file
+  when: encrypted_storage_backing == 'file'
+  ansible.builtin.command: "fallocate -l {{ encrypted_storage_file_size_gb }}G {{ encrypted_storage_file }}"
+  args:
+    creates: "{{ encrypted_storage_file }}"
+
+- name: Restrict the container file
+  when: encrypted_storage_backing == 'file'
+  ansible.builtin.file:
+    path: "{{ encrypted_storage_file }}"
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: Check whether it is already LUKS-formatted
+  ansible.builtin.command: "cryptsetup isLuks {{ encrypted_storage_source }}"
+  register: is_luks
+  changed_when: false
+  failed_when: false
+
+- name: Format with LUKS2 (first run only)
+  when: is_luks.rc != 0
+  ansible.builtin.command: "cryptsetup luksFormat --type luks2 --batch-mode {{ encrypted_storage_source }} --key-file=-"
+  args:
+    stdin: "{{ vault_luks_passphrase }}"
+    stdin_add_newline: false
+  no_log: true
+  changed_when: true
+
+- name: Check whether it is unlocked
+  ansible.builtin.stat:
+    path: "/dev/mapper/{{ encrypted_storage_name }}"
+  register: mapper
+
+- name: Unlock
+  when: not mapper.stat.exists
+  ansible.builtin.command: "cryptsetup open {{ encrypted_storage_source }} {{ encrypted_storage_name }} --key-file=-"
+  args:
+    stdin: "{{ vault_luks_passphrase }}"
+    stdin_add_newline: false
+  no_log: true
+  changed_when: true
+
+- name: Create a filesystem (first run only)
+  community.general.filesystem:
+    dev: "/dev/mapper/{{ encrypted_storage_name }}"
+    fstype: ext4
+
+- name: Create the mount point
+  ansible.builtin.file:
+    path: "{{ encrypted_storage_mount }}"
+    state: directory
+    mode: "0755"
+
+- name: "Mount (not in fstab: the unlock service mounts it after the passphrase is given)"
+  ansible.posix.mount:
+    src: "/dev/mapper/{{ encrypted_storage_name }}"
+    path: "{{ encrypted_storage_mount }}"
+    fstype: ext4
+    opts: noatime
+    state: ephemeral
+
+- name: Install the unlock script
+  ansible.builtin.template:
+    src: unlock.sh.j2
+    dest: "/usr/local/sbin/{{ encrypted_storage_name }}-unlock"
+    mode: "0750"
+
+- name: Install the boot-time unlock service
+  ansible.builtin.template:
+    src: unlock.service.j2
+    dest: "/etc/systemd/system/{{ encrypted_storage_name }}-unlock.service"
+    mode: "0644"
+
+- name: Enable the boot-time unlock service
+  ansible.builtin.systemd:
+    name: "{{ encrypted_storage_name }}-unlock.service"
+    enabled: true
+    daemon_reload: true

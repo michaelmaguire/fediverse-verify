@@ -3,5 +3,9 @@ __pycache__/
 *.egg-info/
 /data/
 .pytest_cache/
+# deploy/: site settings and secrets stay local (this repository is public)
 deploy/.vault-password
 deploy/inventory/hosts.yml
+deploy/inventory/group_vars/
+deploy/collections/
+deploy/*.retry

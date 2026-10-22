@@ -1,0 +1,32 @@
+---
+# Copy to inventory/hosts.yml (git-ignored) and fill in. Every setting is described in
+# roles/verifier/defaults/main.yml. Secrets go in inventory/group_vars/verifier/vault.yml.
+verifier:
+  hosts:
+    verify:
+      ansible_host: 203.0.113.20   # the verifier's own server (never the Mastodon host)
+      ansible_user: ubuntu
+  vars:
+    verifier_domain: verify.example.org
+    verifier_operator_contact: privacy@example.org
+    letsencrypt_email: you@example.org
+    verifier_version: main          # pin a tag or commit for production
+
+    # Start with the test wallets for a demo (DNS for wallet.verify.example.org too).
+    verifier_identity_providers: [mock, mock-ch]
+
+    # Later, real wallets (each needs its own DNS name pointing here):
+    # verifier_identity_providers: [swiyu]
+    # verifier_swiyu_did: "did:webvh:…"
+    # verifier_swiyu_verification_method: "did:webvh:…#auth-key-01"
+    # verifier_swiyu_issuer_dids:
+    #   - "did:webvh:QmdPxnNc9MzGYZ6qcHuvi8YpDVYWW7mmefnCTPcKapNEL5:identifier-reg.trust-infra.swiyu-int.admin.ch:api:v1:did:5f8a3c95-1772-4ebf-ada0-c88bafb258e1"
+
+    # Encrypted data volume (passphrase asked for at every boot).
+    encrypted_storage_name: verifier-data
+    encrypted_storage_mount: /srv/verifier
+    encrypted_storage_backing: file         # or "device" with encrypted_storage_device: /dev/sdb
+    encrypted_storage_file_size_gb: 20
+    encrypted_storage_user: verifier
+    rootless_docker_home_dir: /srv/verifier/home
+    rootless_docker_requires_mount: /srv/verifier

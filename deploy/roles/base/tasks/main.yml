@@ -1,0 +1,82 @@
+---
+- name: Upgrade packages
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: safe
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - acl                 # lets Ansible become an unprivileged user
+      - ca-certificates
+      - curl
+      - gnupg
+      - ufw
+      - unattended-upgrades
+      - fail2ban
+    state: present
+
+- name: Enable unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+
+- name: Disable SSH password login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    mode: "0644"
+  notify: Reload ssh
+
+- name: Allow SSH, HTTP, HTTPS through the firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: ["22", "80", "443"]
+
+- name: Enable firewall (default deny incoming)
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+# Swap and core dumps would copy process memory (which holds decrypted data) to the
+# unencrypted root disk. Use compressed RAM for swap instead, and disable core dumps.
+- name: Install zram swap
+  ansible.builtin.apt:
+    name: systemd-zram-generator
+    state: present
+
+- name: Configure zram swap
+  ansible.builtin.copy:
+    dest: /etc/systemd/zram-generator.conf
+    content: |
+      [zram0]
+      zram-size = min(ram / 2, {{ base_zram_max_mb }})
+      compression-algorithm = zstd
+    mode: "0644"
+  notify: Start zram
+
+- name: Remove any swap file from fstab
+  ansible.posix.mount:
+    path: none
+    src: /swapfile
+    fstype: swap
+    state: absent
+
+- name: Disable core dumps
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-no-core-dumps.conf
+  loop:
+    - { name: kernel.core_pattern, value: "|/bin/false" }
+    - { name: fs.suid_dumpable, value: "0" }

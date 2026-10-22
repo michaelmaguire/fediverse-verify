@@ -1,0 +1,20 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Unlock and mount the encrypted data volume, then start the service user's session
+# (rootless Docker and its containers). Runs at boot; asks for the passphrase
+# via systemd's password agent: answer on the OVH console, or over SSH with
+#   sudo systemd-tty-ask-password-agent
+set -eu
+NAME={{ encrypted_storage_name }}
+SOURCE={{ encrypted_storage_source }}
+MOUNT={{ encrypted_storage_mount }}
+
+if [ ! -e "/dev/mapper/$NAME" ]; then
+  # Without --key-file, cryptsetup reads one line from stdin as the passphrase.
+  systemd-ask-password --timeout=0 --id="$NAME-unlock" "Passphrase for encrypted volume $NAME on $(hostname):" \
+    | cryptsetup open "$SOURCE" "$NAME"
+fi
+mountpoint -q "$MOUNT" || mount -o noatime "/dev/mapper/$NAME" "$MOUNT"
+{% if encrypted_storage_user %}
+systemctl start "user@$(id -u {{ encrypted_storage_user }}).service"
+{% endif %}

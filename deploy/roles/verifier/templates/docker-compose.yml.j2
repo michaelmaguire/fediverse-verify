@@ -1,0 +1,89 @@
+# {{ ansible_managed }}
+# Everything listens on 127.0.0.1 only; Caddy on the host publishes what wallets and
+# browsers need. No access logs anywhere (they would record IPs and proof IDs).
+name: fediverse-verify
+
+x-logging: &logging
+  logging:
+    driver: local
+    options: { max-size: 10m, max-file: "3" }
+
+services:
+  verifier:
+    build:
+      context: ./src
+      args:
+        GIT_COMMIT: "{{ verifier_source.after }}"
+    restart: unless-stopped
+    env_file: verifier.env
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - ./data:/data
+    <<: *logging
+{% if verifier_uses_test_wallets %}
+
+  # Fake ID apps for a demo; every page says TEST, and their proofs are test proofs.
+  test-wallet:
+    build: ./src/test-wallets
+    restart: unless-stopped
+    environment:
+      VERIFIER_ORIGIN: https://{{ verifier_domain }}
+    ports: ["127.0.0.1:8001:8000"]
+    <<: *logging
+{% endif %}
+{% if verifier_uses_eudi %}
+
+  eudi-verifier:
+    image: {{ verifier_eudi_image }}
+    restart: unless-stopped
+    environment:
+      VERIFIER_PUBLICURL: https://{{ verifier_eudi_domain }}
+      VERIFIER_DEFAULTHTTPRESPONSEMODE: DirectPost
+      # Wallet responses (the disclosed claims) are held in memory for at most ~40 minutes
+      # (10 min max age, clean-up every 30 min). Stated on /about: keep the two in sync.
+      VERIFIER_MAXAGE: PT10M
+      VERIFIER_PRESENTATIONS_CLEANUP_MAXAGE: PT10M
+    ports: ["127.0.0.1:8081:8080"]
+    <<: *logging
+{% endif %}
+{% if verifier_uses_swiyu %}
+
+  swiyu-verifier:
+    image: {{ verifier_swiyu_image }}
+    restart: unless-stopped
+    depends_on: [swiyu-db]
+    env_file: swiyu.env
+    environment:
+      EXTERNAL_URL: https://{{ verifier_swiyu_domain }}
+      VERIFIER_DID: "{{ verifier_swiyu_did }}"
+      DID_VERIFICATION_METHOD: "{{ verifier_swiyu_verification_method }}"
+      OPENID_CLIENT_METADATA_FILE: file:/verifier_metadata.json
+      POSTGRES_JDBC: jdbc:postgresql://swiyu-db:5432/swiyu_verifier
+      # Wallet responses are kept in its database until the request expires (10 min) and
+      # the next clean-up (every 5 min): at most ~15 min. Stated on /about.
+      VERIFICATION_TTL_SEC: "600"
+      DATA_CLEAR_PROCESS_INTERVAL_MS: "300000"
+    configs:
+      - source: swiyu_metadata
+        target: /verifier_metadata.json
+    ports: ["127.0.0.1:8083:8080"]
+    <<: *logging
+
+  swiyu-db:
+    image: {{ verifier_postgres_image }}
+    restart: unless-stopped
+    env_file: swiyu-db.env
+    volumes:
+      - swiyu-db:/var/lib/postgresql/data
+    <<: *logging
+
+configs:
+  swiyu_metadata:
+    content: |
+      {{ {"client_id": verifier_swiyu_did, "client_name": verifier_swiyu_client_name,
+          "vp_formats_supported": {"dc+sd-jwt": {"sd-jwt_alg_values": ["ES256"], "kb-jwt_alg_values": ["ES256"]}}}
+         | to_json }}
+
+volumes:
+  swiyu-db:
+{% endif %}

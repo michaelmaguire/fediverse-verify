@@ -1,0 +1,6 @@
+---
+rootless_docker_user: "{{ verifier_user | default('verifier') }}"
+# Put the user's home (and so all of Docker's data) somewhere else, e.g. on an encrypted volume.
+rootless_docker_home_dir: ""
+# If set, the user's session (and rootless Docker) only starts when this path is mounted.
+rootless_docker_requires_mount: ""

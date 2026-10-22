@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Unlock encrypted volume {{ encrypted_storage_name }} (asks for the passphrase)
+After=local-fs.target systemd-ask-password-console.path
+# SSH is not ordered after this unit, so you can log in to answer the prompt.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/{{ encrypted_storage_name }}-unlock
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

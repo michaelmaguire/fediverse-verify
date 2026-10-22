@@ -1,0 +1,42 @@
+---
+# Unlock the encrypted data after a reboot, using the passphrase from your vault.
+# (Or answer the boot prompt yourself: ssh -t ubuntu@host sudo systemd-tty-ask-password-agent)
+- name: Unlock encrypted data and start Fediverse Verify
+  hosts: verifier
+  become: true
+  tasks:
+    - name: Check whether it is unlocked
+      ansible.builtin.stat:
+        path: "/dev/mapper/{{ encrypted_storage_name }}"
+      register: mapper
+
+    - name: Find the backing store
+      ansible.builtin.set_fact:
+        source: >-
+          {{ encrypted_storage_file | default('/var/lib/' + encrypted_storage_name + '.luks')
+             if encrypted_storage_backing | default('file') == 'file'
+             else encrypted_storage_device }}
+
+    - name: Unlock with the vault passphrase
+      when: not mapper.stat.exists
+      ansible.builtin.command: "cryptsetup open {{ source }} {{ encrypted_storage_name }} --key-file=-"
+      args:
+        stdin: "{{ vault_luks_passphrase }}"
+        stdin_add_newline: false
+      no_log: true
+      changed_when: true
+
+    # The boot-time unit is still waiting at its prompt; restarting it skips the prompt
+    # (already unlocked), mounts the volume and starts the service user's session.
+    - name: Finish via the unlock service
+      ansible.builtin.systemd:
+        name: "{{ encrypted_storage_name }}-unlock.service"
+        state: restarted
+
+    - name: Wait for the verifier to answer
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8000/about
+      register: about
+      until: about.status == 200
+      retries: 30
+      delay: 10
