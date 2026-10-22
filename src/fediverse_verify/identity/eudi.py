@@ -6,7 +6,7 @@ chosen options need, then read those claims from the validated presentation.
 
 Credentials used:
 - PID (SD-JWT VC, vct urn:eudi:pid:1): issuer metadata, plus the name for the
-  Verified name level.
+  fediverse-verified name level.
 - EU Proof of Age attestation (ISO mdoc, doctype eu.europa.ec.av.1) for "18+": it
   contains only age_over_18 / age_over_NN, nothing else (AV profile, Annex A).
 - Fallback for the name level only: the PID birth date, used once to compute

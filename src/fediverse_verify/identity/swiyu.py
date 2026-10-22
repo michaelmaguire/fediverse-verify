@@ -33,8 +33,8 @@ CLAIMS_FOR_LEVEL = {
 }
 
 PURPOSES = {
-    "person": ("Verified person", "Confirm that a real person controls your Fediverse account. Only the issuing country and authority are published."),
-    "legal_name": ("Verified name", "Confirm that you control your Fediverse account and publish your legal name on your proof page."),
+    "person": ("fediverse-verified person", "Confirm that a real person controls your Fediverse account. Only the issuing country and authority are published."),
+    "legal_name": ("fediverse-verified name", "Confirm that you control your Fediverse account and publish your legal name on your proof page."),
 }
 
 

@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS proofs (
     expires_at              INTEGER,         -- only for pending proofs
     issuing_country         TEXT,
     issuing_authority       TEXT,
-    age_over_18             INTEGER          -- 1 if shown as 18+; otherwise NULL (never "under 18")
+    age_over_18             INTEGER,         -- 1 if shown as 18+; otherwise NULL (never "under 18")
+    credential              TEXT             -- the signed copy as a W3C credential (JSON); empty while pending
 );
 CREATE INDEX IF NOT EXISTS proofs_subject ON proofs (subject_uri);
 """
@@ -44,7 +45,7 @@ CREATE INDEX IF NOT EXISTS proofs_subject ON proofs (subject_uri);
 PROOF_COLUMNS = (
     "id, verification_level, subject_uri, account_profile_url, handle, name, identity_check_method, "
     "attestation, created_at, status, account_ownership_check, expires_at, issuing_country, issuing_authority, "
-    "age_over_18"
+    "age_over_18, credential"
 )
 
 
@@ -65,6 +66,7 @@ class Proof:
     issuing_country: str | None = None
     issuing_authority: str | None = None
     age_over_18: bool | None = None
+    credential: str = ""                 # W3C Verifiable Credential (eddsa-jcs-2022); empty while pending
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,7 @@ class OAuthClient:
 def _proof(row: sqlite3.Row) -> Proof:
     values = dict(row)
     values["age_over_18"] = True if values.get("age_over_18") else None
+    values["credential"] = values.get("credential") or ""
     return Proof(**values)
 
 
@@ -111,7 +114,8 @@ class Store:
                           ("expires_at", "INTEGER"),
                           ("issuing_country", "TEXT"),
                           ("issuing_authority", "TEXT"),
-                          ("age_over_18", "INTEGER")):
+                          ("age_over_18", "INTEGER"),
+                          ("credential", "TEXT")):
             if name not in columns:
                 self._db.execute(f"ALTER TABLE proofs ADD COLUMN {name} {ddl}")
         # 2026-10-20: value renamed for clarity.
@@ -136,17 +140,17 @@ class Store:
     def add_proof(self, proof: Proof, removal_code: str) -> None:
         self._db.execute(
             f"INSERT INTO proofs ({PROOF_COLUMNS}, removal_code_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (proof.id, proof.verification_level, proof.subject_uri, proof.account_profile_url, proof.handle,
              proof.name, proof.identity_check_method, proof.attestation, proof.created_at, proof.status,
              proof.account_ownership_check, proof.expires_at, proof.issuing_country, proof.issuing_authority,
-             1 if proof.age_over_18 else None, hash_removal_code(removal_code)),
+             1 if proof.age_over_18 else None, proof.credential or None, hash_removal_code(removal_code)),
         )
 
-    def activate(self, proof_id: str, attestation: str, issued_at: int) -> None:
+    def activate(self, proof_id: str, attestation: str, issued_at: int, credential: str = "") -> None:
         self._db.execute(
-            "UPDATE proofs SET status = 'active', attestation = ?, created_at = ?, expires_at = NULL "
-            "WHERE id = ? AND status = 'pending'", (attestation, issued_at, proof_id))
+            "UPDATE proofs SET status = 'active', attestation = ?, credential = ?, created_at = ?, expires_at = NULL "
+            "WHERE id = ? AND status = 'pending'", (attestation, credential or None, issued_at, proof_id))
 
     def purge_expired(self, now: int | None = None) -> int:
         """Delete pending proofs whose account never linked back."""

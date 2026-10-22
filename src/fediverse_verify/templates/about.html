@@ -11,17 +11,17 @@
   <h2>What a proof says</h2>
   <table class="data">
     <tr><th>Level</th><th>Published claim</th><th>Asked from your wallet</th></tr>
-    <tr><td><strong>Verified name</strong><br><span class="muted">link: <code>/n/…</code></span></td>
+    <tr><td><strong>fediverse-verified name</strong><br><span class="muted">link: <code>/n/…</code></span></td>
         <td>"This account is controlled by <em>[legal name]</em>, confirmed with an ID issued by <em>[country (authority)]</em>."</td>
         <td>Given name, family name, issuing country and authority</td></tr>
-    <tr><td><strong>Verified person</strong><br><span class="muted">link: <code>/u/…</code></span></td>
+    <tr><td><strong>fediverse-verified person</strong><br><span class="muted">link: <code>/u/…</code></span></td>
         <td>"This account is controlled by a real person, confirmed with an ID issued by <em>[country (authority)]</em>." No other personal details.</td>
         <td>Only the issuing country and authority</td></tr>
     <tr><td><strong>+ 18+</strong> (optional, with either level)</td>
         <td>"…and they are 18 or over."</td>
         <td>A yes/no "over 18" answer (<a href="#age">how</a>)</td></tr>
   </table>
-  <p class="muted">Readers see which government vouched for the person, so they can weigh it. For the Verified person level this reveals roughly where you're from, at country level only.</p>
+  <p class="muted">Readers see which government vouched for the person, so they can weigh it. For the fediverse-verified person level this reveals roughly where you're from, at country level only.</p>
   <p class="muted">A proof says nothing about whether someone has other accounts: one person may verify several. Proofs don't expire; they last until removed.</p>
 </div>
 
@@ -29,7 +29,7 @@
   <h2>Showing you're 18 or over</h2>
   <p>If you choose to add "18+", we ask your wallet for the EU <strong>proof-of-age credential</strong>, which exists for exactly this: it answers only "is this person over 18?" and contains no name, birth date or ID number (<a href="https://github.com/eu-digital-identity-wallet/av-doc-technical-specification">EU Age Verification specification</a>).</p>
   <p>The <strong>Swiss e-ID</strong> answers "over 18?" directly, so no birth date is ever involved there.</p>
-  <p>For EU wallets at the Verified name level only, if you have no proof-of-age credential, we may instead ask for your birth date from your ID. It is used once to work out whether you're 18 or over and then discarded: it's never stored or published. Your name is published at that level anyway; for Verified person we never ask for a birth date.</p>
+  <p>For EU wallets at the fediverse-verified name level only, if you have no proof-of-age credential, we may instead ask for your birth date from your ID. It is used once to work out whether you're 18 or over and then discarded: it's never stored or published. Your name is published at that level anyway; for fediverse-verified person we never ask for a birth date.</p>
   <p class="muted">If your wallet doesn't confirm you're 18 or over, the proof is issued without mentioning age, and nothing about your age is kept. "18+" reflects a check at the time of verification of whoever controlled the account then; services with legal age-check duties may still need their own.</p>
 </div>
 
@@ -53,8 +53,8 @@
     <tr><td><code>"iss"</code></td><td><code>https://verify.example.org</code></td><td>Issued by this verifier</td></tr>
     <tr><td><code>"sub"</code></td><td><code>https://example.social/users/alice</code></td><td>The account (its ActivityPub ID)</td></tr>
     <tr><td><code>"account_profile_url"</code></td><td><code>https://example.social/@alice</code></td><td>The account's profile page</td></tr>
-    <tr><td><code>"verification_level"</code></td><td><code>legal_name</code></td><td>Verified name, or <code>person</code> for Verified person</td></tr>
-    <tr><td><code>"name"</code></td><td><code>Mario Rossi</code></td><td>The legal name, only for the Verified name level</td></tr>
+    <tr><td><code>"verification_level"</code></td><td><code>legal_name</code></td><td>fediverse-verified name, or <code>person</code> for fediverse-verified person</td></tr>
+    <tr><td><code>"name"</code></td><td><code>Mario Rossi</code></td><td>The legal name, only for the fediverse-verified name level</td></tr>
     <tr><td><code>"issuing_country"</code></td><td><code>IT</code></td><td>Country that issued the ID</td></tr>
     <tr><td><code>"issuing_authority"</code></td><td><code>Ministero dell'Interno</code></td><td>Authority that issued the ID</td></tr>
     <tr><td><code>"identity_check_method"</code></td><td><code>eudi-pid</code></td><td>How the ID was checked: <code>eudi-pid</code> (EU wallet), <code>swiyu-eid</code> (Swiss e-ID), or <code>mock</code> in test mode</td></tr>
@@ -63,6 +63,11 @@
     <tr><td><code>"jti"</code></td><td><code>6q3yJY3bcSvJOlvk</code></td><td>The proof's ID, as in its link</td></tr>
     <tr><td><code>"age_over_18"</code></td><td><code>true</code></td><td>Only present if "18+" was chosen and confirmed (never <code>false</code>)</td></tr>
   </table>
+  <p>The signed copy is published in <strong>two forms</strong> carrying the same facts:</p>
+  <ul>
+    <li><strong>A JSON Web Token</strong> (ES256), shown above: easy to check with standard JWT tools and our <a href="/.well-known/jwks.json">public keys</a>. Download it by adding <code>.jwt</code> to the proof link.</li>
+    <li><strong>A W3C Verifiable Credential</strong> with a Data Integrity proof (<code>eddsa-jcs-2022</code>), issued by <a href="/actor">this verifier's ActivityPub actor</a>. Mastodon already checks this kind of signature for Fediverse messages, so Fediverse servers can check proofs with code they already have. Download it by adding <code>.json</code> to the proof link.</li>
+  </ul>
   <p class="muted">The short names <code>iss</code>, <code>sub</code>, <code>iat</code> and <code>jti</code> are fixed by the <a href="https://www.rfc-editor.org/rfc/rfc7519#section-4.1">JSON Web Token standard</a>, <code>name</code> follows OpenID Connect, and the issuer fields use the EU PID rulebook's names. Technically it's a <a href="https://www.rfc-editor.org/rfc/rfc7519">JSON Web Token</a> signed with ES256. It's in the proof page's source, and each proof page has a "What's in the signed copy?" section showing its contents. You can also download it by adding <code>.jwt</code> to the proof link.</p>
 </div>
 
@@ -81,7 +86,7 @@
 <div class="card" id="keys">
   <h2>Keys, signatures and official registration</h2>
   <p>Signatures use a <strong>key pair</strong>. The <strong>private key</strong> is kept secret on this server and is the only thing that can create our signatures. The matching <strong>public key</strong> is <a href="/.well-known/jwks.json">published</a> so that anyone can check them. If someone altered a proof, or made a fake one, the check against our public key would fail.</p>
-  <p>Our current signing key has the ID <code>{{ signing_key_id }}</code> (ES256, curve P-256). The ID is a fingerprint of the public key (<a href="https://www.rfc-editor.org/rfc/rfc7638">RFC 7638</a>), so you can compare it with what other services show for a proof signed here.</p>
+  <p>We sign with two keys, one per form of the signed copy. The JWT key has the ID <code>{{ signing_key_id }}</code> (ES256, curve P-256). The credential key is an Ed25519 key published on <a href="/actor">our ActivityPub actor</a> as <code>/actor#ed25519-key</code>. The ID is a fingerprint of the public key (<a href="https://www.rfc-editor.org/rfc/rfc7638">RFC 7638</a>), so you can compare it with what other services show for a proof signed here.</p>
 
   <h3>Who stands behind this key</h3>
   {% if settings.rp_register_url %}
@@ -104,7 +109,7 @@
       <ul>
         <li>Your Fediverse handle (e.g. <code>@alice@example.social</code>) and the web links to your account and its profile page</li>
         <li>The level, the date, and how you confirmed the account</li>
-        <li>Your legal name, <em>only</em> for the Verified name level</li>
+        <li>Your legal name, <em>only</em> for the fediverse-verified name level</li>
         <li>The country and authority that issued your ID</li>
         <li>"18 or over", only if you chose to show it and it was confirmed</li>
         <li>A <a href="#signed-copy">signed copy</a> of these same details, as embedded in your proof page</li>
@@ -131,10 +136,11 @@
     <tr><td><code>id</code></td><td>Random ID used in the proof link</td></tr>
     <tr><td><code>verification_level</code></td><td><code>legal_name</code> or <code>person</code></td></tr>
     <tr><td><code>subject_uri</code>, <code>account_profile_url</code>, <code>handle</code></td><td>Your account's ActivityPub ID (a web link such as <code>https://example.social/users/alice</code>), its profile page link, and your handle such as <code>@alice@example.social</code> (all public already)</td></tr>
-    <tr><td><code>name</code></td><td>Your legal name, for the Verified name level only; empty otherwise</td></tr>
+    <tr><td><code>name</code></td><td>Your legal name, for the fediverse-verified name level only; empty otherwise</td></tr>
     <tr><td><code>issuing_country</code>, <code>issuing_authority</code></td><td>Who issued your ID</td></tr>
     <tr><td><code>age_over_18</code></td><td>Set only if you chose to show "18+" and it was confirmed; otherwise empty. We never record that someone is under 18.</td></tr>
     <tr><td><code>identity_check_method</code>, <code>account_ownership_check</code></td><td>How your ID was checked (<code>eudi-pid</code> for an EU wallet, <code>swiyu-eid</code> for the Swiss e-ID, or <code>mock</code> in test mode) and how you proved the account is yours</td></tr>
+    <tr><td><code>credential</code></td><td>The same signed copy as a W3C Verifiable Credential (<a href="#signed-copy">second form</a>); empty while pending</td></tr>
     <tr><td><code>attestation</code></td><td>The <a href="#signed-copy">signed copy</a> of the proof's details embedded in your proof page (the same facts as the other columns, nothing more); empty while pending</td></tr>
     <tr><td><code>removal_code_hash</code></td><td>A <a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final">SHA-256</a> hash of your removal code. The code itself is never stored, so not even the server can show it again.</td></tr>
     <tr><td><code>created_at</code>, <code>status</code>, <code>expires_at</code></td><td>When it was issued, whether it is pending or active, and when a pending proof will be deleted</td></tr>
@@ -215,6 +221,10 @@
     <dd>"Sign in with Mastodon", with the token revoked straight after use.</dd>
     <dt><a href="https://www.rfc-editor.org/rfc/rfc7519">JWT</a>, <a href="https://www.rfc-editor.org/rfc/rfc7515">JWS</a>, <a href="https://www.rfc-editor.org/rfc/rfc7518">JWA (ES256)</a>, <a href="https://www.rfc-editor.org/rfc/rfc7517">JWK</a>, <a href="https://www.rfc-editor.org/rfc/rfc7638">JWK thumbprint</a></dt>
     <dd>The format of the <a href="#signed-copy">signed copy</a> on each proof page, and of the public keys used to check it.</dd>
+    <dt><a href="https://www.w3.org/TR/vc-data-model-2.0/">W3C Verifiable Credentials Data Model 2.0</a>, <a href="https://www.w3.org/TR/vc-di-eddsa/">Data Integrity EdDSA (<code>eddsa-jcs-2022</code>)</a> and <a href="https://www.rfc-editor.org/rfc/rfc8785">RFC 8785: JSON Canonicalization</a></dt>
+    <dd>The second form of the signed copy: a standard credential, signed in the format Mastodon already verifies.</dd>
+    <dt><a href="https://codeberg.org/fediverse/fep/src/branch/main/fep/8b32/fep-8b32.md">FEP-8b32: Object Integrity Proofs</a> and <a href="https://codeberg.org/fediverse/fep/src/branch/main/fep/521a/fep-521a.md">FEP-521a: Representing actor's public keys</a></dt>
+    <dd>How Fediverse software signs and checks objects, and finds the signing key on an actor; the credential key is published this way.</dd>
     <dt><a href="https://codeberg.org/fediverse/fep/src/branch/main/fep/c390/fep-c390.md">FEP-c390: Identity Proofs</a></dt>
     <dd>Related Fediverse proposal for linking identities to accounts; this verifier aims to align with Fediverse Enhancement Proposals over time.</dd>
   </dl>

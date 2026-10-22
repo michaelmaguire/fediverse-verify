@@ -10,12 +10,12 @@ Design and decisions: [`docs/overview.md`](https://github.com/michaelmaguire/fed
    - **Link from profile** (default; any Fediverse software): the proof starts *pending* and goes live once the account's public profile links to it. Pending pages carry `rel="me"` but no name or attestation; unconfirmed proofs are deleted after 24 hours. Anyone can trigger a re-check with `POST /check/<id>`.
    - **Sign in with Mastodon** (OAuth, `read:accounts`): live immediately; the token is revoked right after use.
 2. **They pick a level:**
-   - **Verified name** (recommended): `given_name` + `family_name` are requested and published.
-   - **Verified person**: no name; nothing about the person is published beyond the issuer.
+   - **fediverse-verified name** (recommended): `given_name` + `family_name` are requested and published.
+   - **fediverse-verified person**: no name; nothing about the person is published beyond the issuer.
 
    Both levels also request and publish `issuing_country` and `issuing_authority`, so readers see which government vouched.
 
-   Either level can add **18+**: the EU Proof of Age attestation (`eu.europa.ec.av.1`, only `age_over_18`) is requested; for Verified name the PID `birthdate` is a fallback, used once and discarded. Only `age_over_18: true` is ever stored or published.
+   Either level can add **18+**: the EU Proof of Age attestation (`eu.europa.ec.av.1`, only `age_over_18`) is requested; for fediverse-verified name the PID `birthdate` is a fallback, used once and discarded. Only `age_over_18: true` is ever stored or published.
 3. **Their wallet presents the credential** via OpenID4VP: an EU Digital Identity Wallet (through the EU reference verifier) or the Swiss e-ID (through the federal swiyu verifier), or the mock form in development.
 4. **The verifier publishes a proof page** at `/n/<id>` (name) or `/u/<id>` (person) containing:
    - `<link rel="me">` to the exact profile URL, so stock Mastodon shows a green check;

@@ -251,7 +251,7 @@ def test_issued_page_shows_the_real_label_and_link(client):
     url = html.split("<code data-proof-url>")[1].split("</code>")[0]
     form = html.split('<div class="mshot"')[1].split('<div class="mshot__actions">')[0]
     assert 'class="shot__badge">Example<' in html          # framed as an illustration
-    assert "Verified person" in form and url in form
+    assert "fediverse-verified person" in form and url in form
     assert f"{len(url)}/40 recommended characters" in form
     assert ("limit exceeded" in form) == (len(url) > 40)
 

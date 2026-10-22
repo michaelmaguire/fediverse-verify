@@ -99,7 +99,7 @@ def csrf_from(html: str) -> str:
 
 def link_field(url: str) -> dict:
     """A profile field as Mastodon renders it: HTML with a rel=me link."""
-    return {"name": "Verified name", "value": f'<a href="{url}" rel="me nofollow noopener" target="_blank">{url}</a>'}
+    return {"name": "fediverse-verified name", "value": f'<a href="{url}" rel="me nofollow noopener" target="_blank">{url}</a>'}
 
 
 MARIO = {"given_name": "Mario", "family_name": "Rossi", "issuing_country": "IT",

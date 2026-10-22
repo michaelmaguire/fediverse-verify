@@ -6,6 +6,8 @@
 {% if proof.status == "active" %}
 <link rel="alternate" type="application/jwt" href="{{ url }}.jwt">
 <script type="application/jwt" id="identity-attestation">{{ proof.attestation }}</script>
+{% if proof.credential %}<link rel="alternate" type="application/vc+ld+json" href="{{ url }}.json">
+<script type="application/vc+ld+json" id="fediverse-verified-credential">{{ proof.credential | safe }}</script>{% endif %}
 {% endif %}
 {% endblock %}
 {% block body %}
@@ -29,7 +31,7 @@
     <summary>What's in the signed copy?</summary>
     <p class="muted">This page carries a copy of these details, digitally signed by {{ settings.public_url }}, so anyone can check it was issued here and hasn't been altered (<a href="/about#signed-copy">how it works</a>). Its contents:</p>
     <pre class="code">{{ claims_json }}</pre>
-    <p class="muted">Download: <a href="{{ url }}.jwt">{{ url }}.jwt</a> · Public key: <a href="/.well-known/jwks.json">/.well-known/jwks.json</a></p>
+    <p class="muted">Download as a JWT: <a href="{{ url }}.jwt">{{ url }}.jwt</a> (keys: <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>){% if proof.credential %} · as a W3C credential: <a href="{{ url }}.json">{{ url }}.json</a> (key: <a href="/actor">our ActivityPub actor</a>){% endif %}</p>
   </details>
   {% endif %}
 </div>

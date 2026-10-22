@@ -9,6 +9,8 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 from pathlib import Path
 
 import httpx
@@ -21,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from .attestation import Signer, build_claims
+from .credential import ActorKey, build_credential
 from . import buildinfo
 from .countries import NAMES as COUNTRY_NAMES, issuer_label
 from .binding import BoundAccount
@@ -65,6 +68,11 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                                      headers={"User-Agent": f"fediverse-verify/0.1 (+{settings.public_url})"})
     store = Store(settings.data_dir / "verifier.sqlite3")
     signer = Signer.load_or_create(settings.data_dir / "signing-key.pem")
+    actor_key = ActorKey.load_or_create(settings.data_dir / "actor-ed25519.pem")
+    actor_url = f"{settings.public_url}/actor"
+    actor_key_id = f"{actor_url}#ed25519-key"
+    actor_username = "verify"
+    actor_host = urlparse(settings.public_url).netloc
     binding = MastodonBinding(http, store, app_name=settings.app_name, website=settings.public_url,
                               redirect_uri=f"{settings.public_url}/auth/mastodon/callback",
                               allow_private_hosts=settings.allow_private_hosts)
@@ -83,8 +91,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
     templates.env.globals.update(signing_key_id=signer.kid)
 
     def proof_label(proof: Proof, sep: str = " · ") -> str:
-        """'Verified name', 'Verified person', with '· 18+' when shown."""
-        base = "Verified name" if proof.verification_level == "legal_name" else "Verified person"
+        """'fediverse-verified name', 'fediverse-verified person', with '· 18+' when shown."""
+        base = "fediverse-verified name" if proof.verification_level == "legal_name" else "fediverse-verified person"
         return base + (f"{sep}18+" if proof.age_over_18 else "")
     templates.env.globals.update(proof_label=proof_label)
 
@@ -298,7 +306,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
             # Not live until the account links to it; see /check.
             proof = replace(proof, status="pending", expires_at=proof.created_at + PENDING_TTL)
         else:
-            proof = replace(proof, attestation=sign(proof))
+            proof = sign(proof)
         code = new_removal_code()
         store.add_proof(proof, code)
         end_flow(request)
@@ -318,12 +326,15 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         return render(request, "issued.html", proof=proof, url=proof_url(proof), code=info["code"],
                       age_not_confirmed=info.get("age_not_confirmed", False))
 
-    def sign(proof: Proof) -> str:
+    def sign(proof: Proof) -> Proof:
+        """Both forms of the signed copy: a JWT (ES256) and a W3C credential (eddsa-jcs-2022)."""
         claims = build_claims(issuer=settings.public_url, proof_id=proof.id, subject_uri=proof.subject_uri,
                               profile_url=proof.account_profile_url, level=proof.verification_level, method=proof.identity_check_method,
                               name=proof.name, binding=proof.account_ownership_check, issuing_country=proof.issuing_country,
                               issuing_authority=proof.issuing_authority, age_over_18=proof.age_over_18)
-        return signer.sign(claims)
+        vc = actor_key.sign(build_credential(proof_url=proof_url(proof), issuer=actor_url, claims=claims), actor_key_id,
+                            created=datetime.fromtimestamp(claims["iat"], timezone.utc))
+        return replace(proof, attestation=signer.sign(claims), credential=json.dumps(vc, ensure_ascii=False))
 
     # ---- link-back confirmation (public: anyone may trigger a check, it only reads) ----
     @app.post("/check/{proof_id}")
@@ -341,7 +352,8 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
                 linked = False
             if linked:
                 now = int(time.time())
-                store.activate(proof.id, sign(replace(proof, created_at=now)), now)
+                signed = sign(replace(proof, created_at=now))
+                store.activate(proof.id, signed.attestation, now, signed.credential)
                 last_check.pop(proof.id, None)
                 proof = store.get_proof(proof.id) or proof
         if wants_json:
@@ -362,7 +374,7 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         @app.get("/test-wallet-api/requests/{request_id}")
         async def test_wallet_request(request_id: str):
             provider, pending = find_request(request_id)
-            label = "Verified name" if pending.level == "legal_name" else "Verified person"
+            label = "fediverse-verified name" if pending.level == "legal_name" else "fediverse-verified person"
             return JSONResponse({
                 "client_name": settings.app_name, "client_url": settings.public_url, "system": provider.system,
                 "purpose": f"{label}{' · 18+' if pending.include_age else ''} proof for a Fediverse account",
@@ -429,6 +441,52 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         end_flow(request)
         return render(request, "revoked.html", proofs=proofs)
 
+    # ---- the verifier as an ActivityPub actor (FEP-521a key for eddsa-jcs-2022 credentials) ----
+    @app.get("/actor")
+    async def actor():
+        return JSONResponse({
+            "@context": ["https://www.w3.org/ns/activitystreams", "https://www.w3.org/ns/cid/v1"],
+            "id": actor_url,
+            "type": "Service",
+            "preferredUsername": actor_username,
+            "name": settings.app_name,
+            "summary": "Issues fediverse-verified proofs. This account doesn't post or follow.",
+            "url": settings.public_url,
+            "inbox": f"{actor_url}/inbox",
+            "outbox": f"{actor_url}/outbox",
+            "manuallyApprovesFollowers": True,
+            "discoverable": False,
+            "indexable": False,
+            "assertionMethod": [{
+                "id": actor_key_id,
+                "type": "Multikey",
+                "controller": actor_url,
+                "publicKeyMultibase": actor_key.public_multibase,
+            }],
+        }, media_type="application/activity+json")
+
+    @app.get("/actor/outbox")
+    async def actor_outbox():
+        return JSONResponse({"@context": "https://www.w3.org/ns/activitystreams", "id": f"{actor_url}/outbox",
+                             "type": "OrderedCollection", "totalItems": 0, "orderedItems": []},
+                            media_type="application/activity+json")
+
+    @app.post("/actor/inbox")
+    async def actor_inbox():
+        return JSONResponse({}, status_code=202)        # nothing is processed yet (revocation notices are outgoing)
+
+    @app.get("/.well-known/webfinger")
+    async def webfinger(resource: str = ""):
+        # Mastodon asks for the handle without a port (it looks up WebFinger on port 443).
+        hosts = {actor_host, actor_host.split(":")[0]}
+        accepted = {f"acct:{actor_username}@{h}" for h in hosts} | {actor_url}
+        if resource not in accepted:
+            raise HTTPException(status_code=404)
+        subject = resource if resource.startswith("acct:") else f"acct:{actor_username}@{actor_host.split(':')[0]}"
+        return JSONResponse({"subject": subject, "aliases": [actor_url],
+                             "links": [{"rel": "self", "type": "application/activity+json", "href": actor_url}]},
+                            media_type="application/jrd+json")
+
     @app.get("/.well-known/jwks.json")
     async def jwks():
         return JSONResponse(signer.jwks(), headers={"Cache-Control": "public, max-age=3600"})
@@ -439,6 +497,14 @@ def create_app(settings: Settings, http: httpx.AsyncClient | None = None) -> Fas
         if proof is None or PATH_LEVEL.get(prefix) != proof.verification_level:
             raise HTTPException(status_code=404)
         return proof
+
+    @app.get("/{prefix}/{proof_id}.json")
+    async def proof_credential(prefix: str, proof_id: str):
+        proof = load_proof(prefix, proof_id)
+        if proof.status != "active" or not proof.credential:
+            raise HTTPException(status_code=404)
+        return JSONResponse(json.loads(proof.credential), media_type="application/vc+ld+json",
+                            headers={"X-Robots-Tag": "noindex"})
 
     @app.get("/{prefix}/{proof_id}.jwt", response_class=PlainTextResponse)
     async def proof_jwt(prefix: str, proof_id: str):

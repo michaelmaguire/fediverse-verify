@@ -25,7 +25,7 @@ def claims_of(client, url):
 
 # ---- the four combinations ----
 
-@pytest.mark.parametrize("level,label", [("legal_name", "Verified name · 18+"), ("person", "Verified person · 18+")])
+@pytest.mark.parametrize("level,label", [("legal_name", "fediverse-verified name · 18+"), ("person", "fediverse-verified person · 18+")])
 def test_18_plus_is_shown_and_signed(client, level, label):
     url, _ = verify(client, level, show_age=True)
     page = html.unescape(client.get(path_of(url)).text)
