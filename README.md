@@ -62,6 +62,7 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 | `VERIFIER_EUDI_ENDPOINT` | — | Base URL of the EUDI reference verifier endpoint |
 | `VERIFIER_SWIYU_ENDPOINT` | — | Base URL of the swiyu generic verifier's (internal) management API |
 | `VERIFIER_SWIYU_ISSUER_DIDS` | — | Comma-separated issuer DIDs whose Swiss e-IDs are accepted |
+| `VERIFIER_SWIYU_VCT_VALUES` | Beta-ID types | Comma-separated credential types to ask the Swiss wallet for. Empty means the swiyu Sandbox **Beta-ID**, whose holder chooses its details: proofs from it are test proofs (`swiyu-beta-id`) and never earn a badge. Set it to the real e-ID's type once that launches |
 | `VERIFIER_TEST_WALLET_URL` | `http://localhost:8001` | Where the test wallet apps run, for `mock` / `mock-ch` |
 | `VERIFIER_ALLOW_PRIVATE_HOSTS` | `false` | Allow account servers on private IPs (local testing only) |
 | `VERIFIER_SOURCE_URL` | `https://github.com/michaelmaguire/fediverse-verify` | Linked from every page's footer |
@@ -74,8 +75,9 @@ To test end-to-end with a real Mastodon, use `local/` in the super repo (`./setu
 ## Status
 
 - Working and tested: both account-binding methods, mock wallet, both levels, signed proofs, JWKS, revocation (34 tests, plus an end-to-end run against Mastodon 4.7 in `local/`).
-- Written but untested against a real wallet: the `eudi` and `swiyu` providers.
-- Not yet: `deploy/` (Ansible for the verifier's own server); optionally removing the profile field during revocation; in-memory flow state means a single process only.
+- Written but untested against a real wallet: the `eudi` and `swiyu` providers. Registering with swiyu: [`deploy/swiyu-registration.md`](deploy/swiyu-registration.md).
+- Deploying to your own server: [`deploy/`](deploy/README.md) (Ansible; written and checked locally, not yet run against a real server).
+- Not yet: optionally removing the profile field during revocation; in-memory flow state means a single process only.
 
 ## License
 

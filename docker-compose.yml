@@ -18,6 +18,8 @@ services:
       VERIFIER_SWIYU_ENDPOINT: ${VERIFIER_SWIYU_ENDPOINT:-http://swiyu-verifier:8080}
       # Comma-separated issuer DIDs whose Swiss e-IDs are accepted (from the swiyu trust registry).
       VERIFIER_SWIYU_ISSUER_DIDS: ${VERIFIER_SWIYU_ISSUER_DIDS:-}
+      # Credential types to ask for. Empty = the Sandbox Beta-ID, whose proofs are test proofs.
+      VERIFIER_SWIYU_VCT_VALUES: ${VERIFIER_SWIYU_VCT_VALUES:-}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -39,7 +41,7 @@ services:
 
   # Swiss e-ID: the federal generic verifier (github.com/swiyu-admin-ch/swiyu-verifier).
   # Needs a verifier DID registered in the swiyu identifier registry and onboarding on the
-  # swiyu portals; see its README and the swiyu "getting started as verifier" cookbook.
+  # swiyu portals: see deploy/swiyu-registration.md.
   # Its management API must stay internal; only /oid4vp/api must be reachable by wallets.
   # Required for --profile swiyu: SWIYU_VERIFIER_DID, SWIYU_DID_VERIFICATION_METHOD,
   # SWIYU_SIGNING_KEY, SWIYU_DB_PASSWORD (Compose checks variables even for inactive profiles).
@@ -58,6 +60,10 @@ services:
       POSTGRES_PASSWORD: ${SWIYU_DB_PASSWORD:-}
       POSTGRES_DB: swiyu_verifier
       POSTGRES_JDBC: jdbc:postgresql://swiyu-db:5432/swiyu_verifier
+      # Wallet responses (the disclosed claims) are kept in its database until the request
+      # expires (10 min) and the next clean-up (every 5 min): at most ~15 min. Stated on /about.
+      VERIFICATION_TTL_SEC: "600"
+      DATA_CLEAR_PROCESS_INTERVAL_MS: "300000"
     configs:
       - source: swiyu_metadata
         target: /verifier_metadata.json
